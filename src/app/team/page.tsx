@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProfile, useTeamMembers } from '@/lib/hooks/use-profile';
@@ -78,8 +78,15 @@ function InviteStaffModal({ onClose }: { onClose: () => void }) {
               </div>
               <div>
                 <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Email *</label>
-                <input type="text" autoComplete="off" placeholder="jane@yourfirm.com" value={email} onChange={e => setEmail(e.target.value)}
-                  className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
+                <input
+                  type="text"
+                  autoComplete="new-password"
+                  placeholder="jane@yourfirm.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  onFocus={e => { const len = e.target.value.length; e.target.setSelectionRange(len, len); }}
+                  className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted"
+                />
               </div>
               <div>
                 <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Role</label>
@@ -112,6 +119,9 @@ export default function TeamPage() {
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [roleMsg, setRoleMsg] = useState<Record<string, { ok: boolean; text: string }>>({});
 
+  // Stable reference — prevents AnimatePresence from re-initialising the modal on parent re-renders
+  const handleCloseInvite = useCallback(() => setShowInvite(false), []);
+
   async function handleRoleChange(memberId: string, newRole: Profile['role']) {
     setChangingRole(memberId);
     try {
@@ -126,7 +136,7 @@ export default function TeamPage() {
   return (
     <AppShell title="Team" subtitle={`${members.length} team members`}>
       <AnimatePresence>
-        {showInvite && <InviteStaffModal onClose={() => setShowInvite(false)} />}
+        {showInvite && <InviteStaffModal key="invite-modal" onClose={handleCloseInvite} />}
       </AnimatePresence>
 
       <div className="max-w-3xl mx-auto">

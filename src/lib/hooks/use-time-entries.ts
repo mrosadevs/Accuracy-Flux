@@ -70,11 +70,16 @@ export function useTimeEntries() {
       .order("created_at", { ascending: false })
       .limit(100);
     if (data) {
-      setEntries(data.map((e: Record<string, unknown>) => ({
-        ...(e as unknown as TimeEntry),
-        user_name: (e.profiles as { name?: string } | null)?.name ?? "Unknown",
-        client_name: (e.clients as { name?: string } | null)?.name ?? "",
-      })));
+      setEntries(
+        data
+          // Filter out blank/orphan rows (e.g. test data with no description)
+          .filter((e: Record<string, unknown>) => e.description && (e.hours as number) > 0)
+          .map((e: Record<string, unknown>) => ({
+            ...(e as unknown as TimeEntry),
+            user_name: (e.profiles as { name?: string } | null)?.name ?? "Me",
+            client_name: (e.clients as { name?: string } | null)?.name ?? "",
+          }))
+      );
     }
     setLoading(false);
   }, [supabase, configured]);

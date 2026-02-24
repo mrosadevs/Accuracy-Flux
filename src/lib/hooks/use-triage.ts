@@ -154,11 +154,16 @@ export function useTriage() {
   }
 
   async function deleteThread(threadId: string) {
-    if (!configured) return;
-    // Delete child messages first to avoid FK constraint errors
-    await supabase.from("internal_messages").delete().eq("thread_id", threadId);
-    const { error } = await supabase.from("internal_threads").delete().eq("id", threadId);
-    if (error) throw error;
+    // Use server-side API route to bypass RLS restrictions
+    const res = await fetch('/api/delete-thread', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error ?? 'Failed to delete thread');
+    }
     if (selectedThreadId === threadId) setSelectedThreadId(null);
     await fetchThreads();
   }
