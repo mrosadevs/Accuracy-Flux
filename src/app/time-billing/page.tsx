@@ -317,11 +317,11 @@ export default function TimeBillingPage() {
                     className="grid grid-cols-[2fr,1.5fr,0.8fr,0.8fr,0.8fr,0.6fr,auto] gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-surface-hover/50 transition-colors items-center group">
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0">
-                        {(entry.user_name ?? 'U').split(' ').map((n: string) => n[0]).join('')}
+                        {(entry.user_name ?? 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'U'}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-text-primary">{entry.description}</p>
-                        <p className="text-[10px] text-text-muted">{entry.user_name}</p>
+                        <p className="text-sm font-medium text-text-primary">{entry.description || '(no description)'}</p>
+                        <p className="text-[10px] text-text-muted">{entry.user_name || 'Unknown'}</p>
                       </div>
                     </div>
                     <p className="text-xs text-text-secondary truncate">{entry.client_name || '—'}</p>

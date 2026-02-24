@@ -78,7 +78,7 @@ function InviteStaffModal({ onClose }: { onClose: () => void }) {
               </div>
               <div>
                 <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Email *</label>
-                <input type="email" placeholder="jane@yourfirm.com" value={email} onChange={e => setEmail(e.target.value)}
+                <input type="text" autoComplete="off" placeholder="jane@yourfirm.com" value={email} onChange={e => setEmail(e.target.value)}
                   className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
               </div>
               <div>

@@ -155,6 +155,8 @@ export function useTriage() {
 
   async function deleteThread(threadId: string) {
     if (!configured) return;
+    // Delete child messages first to avoid FK constraint errors
+    await supabase.from("internal_messages").delete().eq("thread_id", threadId);
     const { error } = await supabase.from("internal_threads").delete().eq("id", threadId);
     if (error) throw error;
     if (selectedThreadId === threadId) setSelectedThreadId(null);

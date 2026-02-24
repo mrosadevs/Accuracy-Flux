@@ -13,6 +13,8 @@ import {
 import clsx from 'clsx';
 import { useKanban, type ColumnWithCards } from '@/lib/hooks/use-kanban';
 import type { KanbanCard } from '@/lib/types/database';
+import { useClients } from '@/lib/hooks/use-clients';
+import { useTeamMembers } from '@/lib/hooks/use-profile';
 
 /* â”€â”€â”€ Add Card Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function AddCardModal({
@@ -23,6 +25,8 @@ function AddCardModal({
   onClose: () => void;
   onSave: (columnId: string, card: Partial<KanbanCard>) => Promise<void>;
 }) {
+  const { clients } = useClients();
+  const { members } = useTeamMembers();
   const [title, setTitle] = useState('');
   const [columnId, setColumnId] = useState(defaultColumnId ?? columns[0]?.id ?? '');
   const [clientName, setClientName] = useState('');
@@ -96,13 +100,19 @@ function AddCardModal({
           </div>
           <div>
             <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client Name</label>
-            <input type="text" placeholder="Johnson & Associates" value={clientName} onChange={e => setClientName(e.target.value)}
-              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
+            <select value={clientName} onChange={e => setClientName(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+              <option value="">No client</option>
+              {clients.map(c => <option key={c.id} value={c.name}>{c.name}{c.company ? ` — ${c.company}` : ''}</option>)}
+            </select>
           </div>
           <div>
             <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assignee</label>
-            <input type="text" placeholder="Sarah Chen" value={assignee} onChange={e => setAssignee(e.target.value)}
-              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
+            <select value={assignee} onChange={e => setAssignee(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+              <option value="">Unassigned</option>
+              {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+            </select>
           </div>
           <div>
             <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Tags (comma-separated)</label>
@@ -125,6 +135,8 @@ function AddCardModal({
 
 /* --- Edit Card Modal --- */
 function EditCardModal({ card, columns, onClose, onSave }: { card: KanbanCard; columns: ColumnWithCards[]; onClose: () => void; onSave: (cardId: string, updates: Partial<KanbanCard>) => Promise<void> }) {
+  const { clients } = useClients();
+  const { members } = useTeamMembers();
   const [title, setTitle] = useState(card.title);
   const [columnId, setColumnId] = useState(card.column_id);
   const [clientName, setClientName] = useState(card.client_name ?? '');
@@ -191,13 +203,19 @@ function EditCardModal({ card, columns, onClose, onSave }: { card: KanbanCard; c
           </div>
           <div>
             <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client Name</label>
-            <input type="text" value={clientName} onChange={e => setClientName(e.target.value)}
-              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+            <select value={clientName} onChange={e => setClientName(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+              <option value="">No client</option>
+              {clients.map(c => <option key={c.id} value={c.name}>{c.name}{c.company ? ` — ${c.company}` : ''}</option>)}
+            </select>
           </div>
           <div>
             <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assignee</label>
-            <input type="text" value={assignee} onChange={e => setAssignee(e.target.value)}
-              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+            <select value={assignee} onChange={e => setAssignee(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+              <option value="">Unassigned</option>
+              {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+            </select>
           </div>
           <div>
             <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Tags (comma-separated)</label>
