@@ -307,14 +307,14 @@ export default function TimeBillingPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-[2fr,1.5fr,0.8fr,0.8fr,0.8fr,0.6fr,auto] gap-4 px-5 py-3 bg-surface-hover/50 border-b border-border">
+                <div className="grid grid-cols-[2fr_1.5fr_0.8fr_0.8fr_0.8fr_0.6fr_auto] gap-4 px-5 py-3 bg-surface-hover/50 border-b border-border">
                   {['Task', 'Client', 'Hours', 'Amount', 'Date', 'Type', ''].map(h => (
                     <span key={h} className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{h}</span>
                   ))}
                 </div>
                 {entries.map((entry, i) => (
                   <motion.div key={entry.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
-                    className="grid grid-cols-[2fr,1.5fr,0.8fr,0.8fr,0.8fr,0.6fr,auto] gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-surface-hover/50 transition-colors items-center group">
+                    className="grid grid-cols-[2fr_1.5fr_0.8fr_0.8fr_0.8fr_0.6fr_auto] gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-surface-hover/50 transition-colors items-center group">
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0">
                         {(entry.user_name ?? 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'U'}
@@ -355,14 +355,14 @@ export default function TimeBillingPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-[0.8fr,2fr,1fr,1fr,1fr,0.8fr,auto] gap-4 px-5 py-3 bg-surface-hover/50 border-b border-border">
+                <div className="grid grid-cols-[0.8fr_2fr_1fr_1fr_1fr_0.8fr_auto] gap-4 px-5 py-3 bg-surface-hover/50 border-b border-border">
                   {['Invoice', 'Client', 'Amount', 'Issued', 'Due', 'Status', ''].map(h => (
                     <span key={h} className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{h}</span>
                   ))}
                 </div>
                 {invoices.map((invoice, i) => (
                   <motion.div key={invoice.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
-                    className="grid grid-cols-[0.8fr,2fr,1fr,1fr,1fr,0.8fr,auto] gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-surface-hover/50 transition-colors items-center group">
+                    className="grid grid-cols-[0.8fr_2fr_1fr_1fr_1fr_0.8fr_auto] gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-surface-hover/50 transition-colors items-center group">
                     <p className="text-sm font-mono font-semibold text-primary-600">{invoice.invoice_number}</p>
                     <p className="text-sm font-medium text-text-primary truncate">
                       {(invoice as Record<string, unknown> & { clients?: { name?: string } }).clients?.name ?? '—'}
