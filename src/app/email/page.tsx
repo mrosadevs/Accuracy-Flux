@@ -160,7 +160,7 @@ function NotificationItem({ notif, active, onClick }: { notif: PortalNotificatio
 }
 export default function TriagePage() {
   const { profile } = useProfile();
-  const { threads, messages, portalNotifications, loading, selectedThreadId, setSelectedThreadId, selectThread, createThread, sendMessage, deleteThread, renameThread, markPortalRead, bumpPortalMessage, unreadPortalCount } = useTriage();
+  const { threads, messages, portalNotifications, loading, selectedThreadId, setSelectedThreadId, selectThread, createThread, sendMessage, deleteThread, renameThread, markPortalRead, bumpPortalMessage, bumpThread, unreadPortalCount } = useTriage();
   const [tab, setTab] = useState<'team' | 'clients'>('team');
   const [showNewThread, setShowNewThread] = useState(false);
   const [messageInput, setMessageInput] = useState('');
@@ -277,14 +277,23 @@ export default function TriagePage() {
         <div className="flex-1 flex flex-col min-w-0">
           {selectedThread && tab === 'team' ? (
             <>
-              <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
-                <div className="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center">
-                  <MessageSquare className="w-4 h-4 text-primary-600" />
+              <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center">
+                    <MessageSquare className="w-4 h-4 text-primary-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-text-primary">{selectedThread.title}</p>
+                    <p className="text-xs text-text-muted">Started by {selectedThread.creator_name ?? 'Unknown'} · {timeAgo(selectedThread.created_at)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-text-primary">{selectedThread.title}</p>
-                  <p className="text-xs text-text-muted">Started by {selectedThread.creator_name ?? 'Unknown'} · {timeAgo(selectedThread.created_at)}</p>
-                </div>
+                <motion.button
+                  onClick={() => bumpThread(selectedThread.id)}
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors flex-shrink-0"
+                >
+                  <Bell className="w-3 h-3" />Bump
+                </motion.button>
               </div>
 
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
@@ -326,26 +335,17 @@ export default function TriagePage() {
             </>
           ) : selectedNotif && tab === 'clients' ? (
             <>
-              <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
-                    <Bell className="w-4 h-4 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-text-primary">{selectedNotif.client_name}</p>
-                    <p className="text-xs text-text-muted">
-                      Client portal message · {timeAgo(selectedNotif.created_at)}
-                      {selectedNotif.read_at && <span className="ml-2 inline-flex items-center gap-0.5 text-success"><CheckCheck className="w-3 h-3" />Read</span>}
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
+                  <Bell className="w-4 h-4 text-amber-600" />
                 </div>
-                <motion.button
-                  onClick={async () => { await bumpPortalMessage(selectedNotif.client_id, selectedNotif.client_name, selectedNotif.message); }}
-                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors flex-shrink-0"
-                >
-                  <Bell className="w-3 h-3" />Bump
-                </motion.button>
+                <div>
+                  <p className="text-sm font-bold text-text-primary">{selectedNotif.client_name}</p>
+                  <p className="text-xs text-text-muted">
+                    Client portal message · {timeAgo(selectedNotif.created_at)}
+                    {selectedNotif.read_at && <span className="ml-2 inline-flex items-center gap-0.5 text-success"><CheckCheck className="w-3 h-3" />Read</span>}
+                  </p>
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-6">
                 <div className="max-w-2xl mx-auto space-y-4">

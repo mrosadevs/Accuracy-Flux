@@ -300,9 +300,10 @@ export default function PortalPage() {
                 {/* Upload zone */}
                 <div
                   onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
+                  onClick={() => uploadProgress === null && fileInputRef.current?.click()}
                   className={clsx(
-                    'relative bg-white rounded-2xl border-2 border-dashed p-8 text-center transition-all',
-                    isDragging ? 'border-primary-400 bg-primary-50/50 scale-[1.01]' : 'border-border hover:border-primary-300'
+                    'relative bg-white rounded-2xl border-2 border-dashed p-8 text-center transition-all cursor-pointer',
+                    isDragging ? 'border-primary-400 bg-primary-50/50 scale-[1.01]' : 'border-border hover:border-primary-300 hover:bg-primary-50/30'
                   )}>
                   <AnimatePresence>
                     {isDragging && (

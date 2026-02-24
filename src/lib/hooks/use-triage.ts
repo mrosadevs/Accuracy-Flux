@@ -206,6 +206,23 @@ export function useTriage() {
     await fetchPortalNotifications();
   }
 
+  async function bumpThread(threadId: string) {
+    if (!configured || !profile) return;
+    const bumpMsg = `⚡ Bumped by ${profile.name} — this thread needs attention`;
+    await supabase.from("internal_messages").insert({
+      thread_id: threadId,
+      sender_id: profile.id,
+      sender_name: profile.name,
+      content: bumpMsg,
+    });
+    await supabase.from("internal_threads").update({
+      last_message_at: new Date().toISOString(),
+      last_message_preview: bumpMsg,
+    }).eq("id", threadId);
+    await fetchMessages(threadId);
+    await fetchThreads();
+  }
+
   // Marks a thread as read in localStorage and notifies useNotifications
   function selectThread(threadId: string | null) {
     setSelectedThreadId(threadId);
@@ -222,7 +239,7 @@ export function useTriage() {
   return {
     threads, messages, portalNotifications, loading,
     selectedThreadId, setSelectedThreadId, selectThread,
-    createThread, sendMessage, deleteThread, renameThread, markPortalRead, bumpPortalMessage,
+    createThread, sendMessage, deleteThread, renameThread, markPortalRead, bumpPortalMessage, bumpThread,
     unreadPortalCount,
     refetchThreads: fetchThreads,
   };
