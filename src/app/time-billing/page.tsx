@@ -186,7 +186,7 @@ function StartTimerModal({ onClose, onStart }: {
   onClose: () => void;
   onStart: (data: {
     description: string; clientId: string | null; clientName: string;
-    workItemId: string | null; billable: boolean; rate: number;
+    workItemId: string | null; billable: boolean; amount: number;
   }) => void;
 }) {
   const { clients }   = useClients();
@@ -196,7 +196,7 @@ function StartTimerModal({ onClose, onStart }: {
   const [clientId,    setClientId]    = useState('');
   const [workItemId,  setWorkItemId]  = useState('');
   const [billable,    setBillable]    = useState(true);
-  const [rate,        setRate]        = useState('150');
+  const [amount,      setAmount]      = useState('');
   const [error,       setError]       = useState('');
 
   const filteredWorkItems = workItems.filter(w =>
@@ -229,7 +229,7 @@ function StartTimerModal({ onClose, onStart }: {
       clientName: selectedClient?.name ?? '',
       workItemId: workItemId || null,
       billable,
-      rate: parseFloat(rate) || 150,
+      amount: parseFloat(amount) || 0,
     });
     onClose();
   }
@@ -278,8 +278,11 @@ function StartTimerModal({ onClose, onStart }: {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Billing Rate ($/hr)</label>
-              <input type="number" min="0" placeholder="150" value={rate} onChange={e => setRate(e.target.value)}
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">
+                Amount Charged ($)
+                <span className="ml-1 font-normal text-text-muted">Rate auto-calculated on stop</span>
+              </label>
+              <input type="number" min="0" step="0.01" placeholder="225.00" value={amount} onChange={e => setAmount(e.target.value)}
                 className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
             </div>
             <div className="flex flex-col justify-end pb-0.5">
@@ -332,7 +335,7 @@ export default function TimeBillingPage() {
     try { await stopTimer(); } finally { setStoppingTimer(false); }
   }
 
-  const estimatedAmount = activeTimer ? Math.round((elapsed / 3600) * activeTimer.rate * 100) / 100 : 0;
+  const chargedAmount = activeTimer?.amount ?? 0;
 
   return (
     <AppShell title="Time & Billing" subtitle="Track time and manage invoices">
@@ -377,12 +380,17 @@ export default function TimeBillingPage() {
                   <div>
                     <p className="text-sm opacity-80 font-medium">Currently tracking</p>
                     <p className="text-lg font-bold">{activeTimer.description}{activeTimer.clientName ? ` — ${activeTimer.clientName}` : ''}</p>
-                    <p className="text-xs opacity-70 mt-0.5">{activeTimer.billable ? 'Billable' : 'Non-billable'} · ${activeTimer.rate}/hr</p>
+                    <p className="text-xs opacity-70 mt-0.5">
+                      {activeTimer.billable ? 'Billable' : 'Non-billable'}
+                      {chargedAmount > 0 ? ` · Charging $${chargedAmount.toFixed(2)}` : ''}
+                    </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-3xl font-mono font-bold tracking-wider">{elapsedFormatted}</p>
-                  <p className="text-sm opacity-70 mt-0.5">${estimatedAmount.toFixed(2)} estimated</p>
+                  {chargedAmount > 0 && (
+                    <p className="text-sm opacity-70 mt-0.5">${chargedAmount.toFixed(2)} charged</p>
+                  )}
                 </div>
               </>
             ) : (

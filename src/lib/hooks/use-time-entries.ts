@@ -26,7 +26,7 @@ export interface ActiveTimer {
   workItemId: string | null;
   startedAt: number;
   billable: boolean;
-  rate: number;
+  amount: number;   // Total amount charged for the job (rate is derived on stop)
 }
 
 const LS_KEY = "af_active_timer";
@@ -127,6 +127,9 @@ export function useTimeEntries() {
     const hours = Math.round((finalElapsed / 3600) * 100) / 100;
     if (hours <= 0) return;
 
+    // Derive hourly rate from the total amount charged ÷ actual hours
+    const rate = hours > 0 && current.amount > 0 ? current.amount / hours : 0;
+
     await supabase.from("time_entries").insert({
       work_item_id: current.workItemId,
       client_id: current.clientId,
@@ -135,7 +138,7 @@ export function useTimeEntries() {
       hours,
       date: new Date().toISOString().split("T")[0],
       billable: current.billable,
-      rate: current.rate,
+      rate,
     });
 
     // Sync time_spent on linked work item
