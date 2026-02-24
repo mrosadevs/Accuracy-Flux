@@ -5,7 +5,6 @@ import AppShell from '@/components/layout/AppShell';
 import { motion } from 'framer-motion';
 import { useProfile } from '@/lib/hooks/use-profile';
 import { useSupabase } from '@/lib/hooks/use-supabase';
-import { useRouter } from 'next/navigation';
 import {
   User, Lock, LogOut, Save, Loader2, AlertCircle, CheckCircle, Eye, EyeOff
 } from 'lucide-react';
@@ -16,7 +15,6 @@ const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#ef4444'
 export default function SettingsPage() {
   const { profile, updateProfile, loading } = useProfile();
   const supabase = useSupabase();
-  const router = useRouter();
 
   const [name, setName] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
@@ -68,8 +66,13 @@ export default function SettingsPage() {
 
   async function handleSignOut() {
     setSigningOut(true);
-    await supabase.auth.signOut();
-    router.push('/login');
+    try {
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise(resolve => setTimeout(resolve, 3000)),
+      ]);
+    } catch { /* ignore */ }
+    window.location.href = '/login';
   }
 
   if (loading) {
