@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Mail, Lock, Eye, EyeOff, ArrowRight, Shield,
@@ -10,9 +11,10 @@ import {
 import clsx from 'clsx';
 import { useSupabase } from '@/lib/hooks/use-supabase';
 
-export default function LoginPage() {
+function LoginPageInner() {
   const supabase = useSupabase();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [step, setStep] = useState<'login' | '2fa' | 'forgot'>('login');
   const [showPassword, setShowPassword] = useState(false);
@@ -24,6 +26,12 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [mfaFactorId, setMfaFactorId] = useState('');
   const [resetSent, setResetSent] = useState(false);
+
+  // Show errors passed via ?error= from auth callback (e.g. expired invite link)
+  useEffect(() => {
+    const urlError = searchParams.get('error');
+    if (urlError) setError(decodeURIComponent(urlError));
+  }, [searchParams]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -478,5 +486,13 @@ export default function LoginPage() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
   );
 }
