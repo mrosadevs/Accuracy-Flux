@@ -149,6 +149,11 @@ export function useTriage() {
       last_message_at: new Date().toISOString(),
       last_message_preview: content.slice(0, 120),
     }).eq("id", threadId);
+    // Mark as read since we just sent the message (we're actively in the thread)
+    try {
+      localStorage.setItem(`af_read_thread_${threadId}`, new Date().toISOString());
+      window.dispatchEvent(new CustomEvent("af-thread-read", { detail: { threadId } }));
+    } catch { /* ignore */ }
     await fetchMessages(threadId);
     await fetchThreads();
   }
@@ -201,11 +206,22 @@ export function useTriage() {
     await fetchPortalNotifications();
   }
 
+  // Marks a thread as read in localStorage and notifies useNotifications
+  function selectThread(threadId: string | null) {
+    setSelectedThreadId(threadId);
+    if (threadId) {
+      try {
+        localStorage.setItem(`af_read_thread_${threadId}`, new Date().toISOString());
+        window.dispatchEvent(new CustomEvent("af-thread-read", { detail: { threadId } }));
+      } catch { /* ignore */ }
+    }
+  }
+
   const unreadPortalCount = portalNotifications.filter(n => !n.read_at).length;
 
   return {
     threads, messages, portalNotifications, loading,
-    selectedThreadId, setSelectedThreadId,
+    selectedThreadId, setSelectedThreadId, selectThread,
     createThread, sendMessage, deleteThread, renameThread, markPortalRead, bumpPortalMessage,
     unreadPortalCount,
     refetchThreads: fetchThreads,

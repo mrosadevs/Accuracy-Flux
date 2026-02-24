@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useProfile } from '@/lib/hooks/use-profile';
+import { useNotifications } from '@/lib/hooks/use-notifications';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', badge: null },
@@ -42,6 +43,7 @@ interface SidebarProps {
 export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: SidebarProps) {
   const pathname = usePathname();
   const { profile, isAdmin } = useProfile();
+  const { unreadCount } = useNotifications();
 
   const displayName = profile?.name ?? 'Loading…';
   const displayInitials = profile?.initials ?? (profile?.name ? profile.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'AF');
@@ -168,15 +170,20 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
                     </motion.span>
                   )}
                 </AnimatePresence>
-                {item.badge && !collapsed && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="ml-auto text-[10px] font-bold text-white bg-primary-600 rounded-full w-5 h-5 flex items-center justify-center"
-                  >
-                    {item.badge}
-                  </motion.span>
-                )}
+                {(() => {
+                  const badge = item.href === '/email' && unreadCount > 0
+                    ? String(unreadCount > 9 ? '9+' : unreadCount)
+                    : item.badge;
+                  return badge && !collapsed ? (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="ml-auto text-[10px] font-bold text-white bg-primary-600 rounded-full w-5 h-5 flex items-center justify-center"
+                    >
+                      {badge}
+                    </motion.span>
+                  ) : null;
+                })()}
                 {collapsed && (
                   <div className="absolute left-full ml-3 px-2 py-1 bg-foreground text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
                     {item.label}

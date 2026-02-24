@@ -160,7 +160,7 @@ function NotificationItem({ notif, active, onClick }: { notif: PortalNotificatio
 }
 export default function TriagePage() {
   const { profile } = useProfile();
-  const { threads, messages, portalNotifications, loading, selectedThreadId, setSelectedThreadId, createThread, sendMessage, deleteThread, renameThread, markPortalRead, bumpPortalMessage, unreadPortalCount } = useTriage();
+  const { threads, messages, portalNotifications, loading, selectedThreadId, setSelectedThreadId, selectThread, createThread, sendMessage, deleteThread, renameThread, markPortalRead, bumpPortalMessage, unreadPortalCount } = useTriage();
   const [tab, setTab] = useState<'team' | 'clients'>('team');
   const [showNewThread, setShowNewThread] = useState(false);
   const [messageInput, setMessageInput] = useState('');
@@ -188,7 +188,7 @@ export default function TriagePage() {
   }
 
   async function handleSelectNotif(notif: PortalNotification) {
-    setSelectedNotif(notif); setSelectedThreadId(null);
+    setSelectedNotif(notif); selectThread(null);
     if (!notif.read_at) await markPortalRead(notif.id);
   }
 
@@ -250,7 +250,7 @@ export default function TriagePage() {
                 </div>
               ) : threads.map(thread => (
                 <ThreadItem key={thread.id} thread={thread} active={selectedThreadId === thread.id}
-                  onClick={() => { setSelectedThreadId(thread.id); setSelectedNotif(null); }}
+                  onClick={() => { selectThread(thread.id); setSelectedNotif(null); }}
                   onDelete={() => handleDeleteThread(thread.id)}
                   onRename={async () => {
                     const newTitle = prompt("Rename thread:", thread.title);
