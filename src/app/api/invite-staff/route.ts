@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
 
     // Redirect to the app's auth callback so staff can set their own password
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${appUrl}/auth/callback`,
