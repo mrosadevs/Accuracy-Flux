@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useClients } from '@/lib/hooks/use-clients';
+import { useTeamMembers } from '@/lib/hooks/use-profile';
 import { useInvoices } from '@/lib/hooks/use-invoices';
 import type { Client } from '@/lib/types/database';
 
@@ -148,6 +149,7 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
   const [assignedTo, setAssignedTo] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const { members } = useTeamMembers();
 
   async function handleSave() {
     if (!name.trim()) { setError('Client name is required.'); return; }
@@ -217,8 +219,11 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
             </div>
             <div className="col-span-2">
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assigned To</label>
-              <input type="text" placeholder="Staff member name" value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
+              <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="">Unassigned</option>
+                {members.map(m => <option key={m.id} value={m.name}>{m.name} ({m.role})</option>)}
+              </select>
             </div>
           </div>
           <div className="flex gap-3 pt-1">
@@ -326,6 +331,7 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
   const [assignedTo, setAssignedTo] = useState(client.assigned_to ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const { members } = useTeamMembers();
 
   async function handleSave() {
     if (!name.trim()) { setError("Client name is required."); return; }
@@ -386,8 +392,11 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
             </div>
             <div>
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assigned To</label>
-              <input type="text" value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+              <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="">Unassigned</option>
+                {members.map(m => <option key={m.id} value={m.name}>{m.name} ({m.role})</option>)}
+              </select>
             </div>
           </div>
           <div className="flex gap-3 pt-1">

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell, Plus, ChevronDown, Calendar, Clock,
-  FileText, User, Sparkles, Menu, Sun, Moon, Play, Check
+  FileText, User, Menu, Sun, Moon, Check
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
 import { useActiveTimer } from '@/lib/hooks/use-active-timer';
@@ -25,10 +25,6 @@ export default function TopBar({ title, subtitle, onMenuClick }: TopBarProps) {
   const { activeTimer, elapsedFormatted } = useActiveTimer();
   const { notifications, unreadCount, markAllRead } = useNotifications();
   const router = useRouter();
-
-  function openAI() {
-    window.dispatchEvent(new CustomEvent('open-ai-assistant'));
-  }
 
   function quickAction(action: string) {
     setShowQuickActions(false);
@@ -70,46 +66,6 @@ export default function TopBar({ title, subtitle, onMenuClick }: TopBarProps) {
 
       {/* Right: Actions */}
       <div className="flex items-center gap-2">
-        {/* Timer Widget */}
-        {activeTimer ? (
-          <motion.button
-            onClick={() => router.push('/time-billing')}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-success/10 border border-success/20 hover:bg-success/20 transition-colors"
-          >
-            <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-            <span className="text-xs font-mono font-semibold text-success">{elapsedFormatted}</span>
-            <span className="text-[10px] text-success/80 hidden sm:block max-w-[100px] truncate">{activeTimer.description || activeTimer.clientName}</span>
-          </motion.button>
-        ) : (
-          <button
-            onClick={() => quickAction('timer')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-text-secondary hover:bg-surface-hover border border-border transition-colors"
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span className="hidden sm:block">Timer</span>
-          </button>
-        )}
-
-        {/* AI Button */}
-        <motion.button
-          onClick={openAI}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary-600 to-accent-600 text-white shadow-sm hover:shadow-md hover:opacity-90 transition-all"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span className="hidden sm:block">AI Assist</span>
-        </motion.button>
-        {/* Theme Toggle */}
-        <button
-          onClick={toggleTheme}
-          className="p-2 hover:bg-surface-hover rounded-xl transition-colors"
-        >
-          {theme === 'dark' ? <Sun className="w-4 h-4 text-text-muted" /> : <Moon className="w-4 h-4 text-text-muted" />}
-        </button>
-
         {/* Quick Actions + Button */}
         <div className="relative">
           <motion.button
@@ -154,6 +110,36 @@ export default function TopBar({ title, subtitle, onMenuClick }: TopBarProps) {
             )}
           </AnimatePresence>
         </div>
+        {/* Timer Widget */}
+        {activeTimer ? (
+          <motion.button
+            onClick={() => router.push('/time-billing')}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-success/10 border border-success/20 hover:bg-success/20 transition-colors"
+          >
+            <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+            <span className="text-xs font-mono font-semibold text-success">{elapsedFormatted}</span>
+            <span className="text-[10px] text-success/80 hidden sm:block max-w-[100px] truncate">{activeTimer.description || activeTimer.clientName}</span>
+          </motion.button>
+        ) : (
+          <button
+            onClick={() => quickAction('timer')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-text-secondary hover:bg-surface-hover border border-border transition-colors"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span className="hidden sm:block">Timer</span>
+          </button>
+        )}
+
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="p-2 hover:bg-surface-hover rounded-xl transition-colors"
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4 text-text-muted" /> : <Moon className="w-4 h-4 text-text-muted" />}
+        </button>
+
         {/* Notifications Bell */}
         <div className="relative">
           <motion.button

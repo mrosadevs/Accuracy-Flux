@@ -161,6 +161,17 @@ export function useTriage() {
     await fetchThreads();
   }
 
+  async function renameThread(threadId: string, newTitle: string) {
+    if (!newTitle.trim()) return;
+    if (!configured) {
+      setThreads(prev => prev.map(t => t.id === threadId ? { ...t, title: newTitle } : t));
+      return;
+    }
+    const { error } = await supabase.from("internal_threads").update({ title: newTitle }).eq("id", threadId);
+    if (error) throw error;
+    await fetchThreads();
+  }
+
   async function markPortalRead(messageId: string) {
     if (!configured) return;
     await supabase
@@ -170,12 +181,25 @@ export function useTriage() {
     await fetchPortalNotifications();
   }
 
+  async function bumpPortalMessage(clientId: string, clientName: string, originalMessage: string) {
+    if (!configured || !profile) return;
+    await supabase.from("portal_messages").insert({
+      client_id: clientId,
+      sender_id: profile.id,
+      sender_name: `📌 Bumped by ${profile.name}`,
+      message: `[Bumped] ${originalMessage.slice(0, 100)}`,
+      is_from_client: true,
+      read_at: null,
+    });
+    await fetchPortalNotifications();
+  }
+
   const unreadPortalCount = portalNotifications.filter(n => !n.read_at).length;
 
   return {
     threads, messages, portalNotifications, loading,
     selectedThreadId, setSelectedThreadId,
-    createThread, sendMessage, deleteThread, markPortalRead,
+    createThread, sendMessage, deleteThread, renameThread, markPortalRead, bumpPortalMessage,
     unreadPortalCount,
     refetchThreads: fetchThreads,
   };

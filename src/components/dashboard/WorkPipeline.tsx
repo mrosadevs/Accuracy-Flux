@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { useWorkItems } from '@/lib/hooks/use-work-items';
 import { Clock, AlertTriangle, CheckCircle2, Pause, Play, Briefcase } from 'lucide-react';
 import clsx from 'clsx';
@@ -22,6 +23,7 @@ const priorityConfig: Record<string, { label: string; color: string }> = {
 
 export default function WorkPipeline() {
   const { workItems, loading } = useWorkItems();
+  const router = useRouter();
   const visible = workItems.filter(w => w.status !== 'completed').slice(0, 5);
 
   return (
@@ -36,7 +38,7 @@ export default function WorkPipeline() {
           <h3 className="text-sm font-semibold text-text-primary">Work Pipeline</h3>
           <p className="text-xs text-text-muted mt-0.5">Active work items across your practice</p>
         </div>
-        <button className="text-xs text-primary-600 hover:text-primary-700 font-medium">View all</button>
+        <button onClick={() => router.push('/work')} className="text-xs text-primary-600 hover:text-primary-700 font-medium">View all</button>
       </div>
 
       {loading ? (
@@ -63,6 +65,7 @@ export default function WorkPipeline() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 + i * 0.07 }}
                 whileHover={{ x: 4 }}
+                onClick={() => router.push('/work')}
                 className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-hover transition-all cursor-pointer group border border-transparent hover:border-border"
               >
                 {/* Progress Ring */}

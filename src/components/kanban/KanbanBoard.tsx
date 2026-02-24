@@ -247,15 +247,21 @@ function DeleteCardModal({ card, onClose, onDelete }: { card: KanbanCard; onClos
     </motion.div>
   );
 }
+const COLUMN_COLORS = [
+  '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b',
+  '#ef4444', '#ec4899', '#06b6d4', '#64748b',
+];
+
 /* --- Add Column Modal --- */
-function AddColumnModal({ onClose, onSave }: { onClose: () => void; onSave: (title: string) => Promise<void> }) {
+function AddColumnModal({ onClose, onSave }: { onClose: () => void; onSave: (title: string, color: string) => Promise<void> }) {
   const [title, setTitle] = useState('');
+  const [color, setColor] = useState('#3b82f6');
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     if (!title.trim()) return;
     setSaving(true);
-    try { await onSave(title.trim()); onClose(); } catch { setSaving(false); }
+    try { await onSave(title.trim(), color); onClose(); } catch { setSaving(false); }
   }
 
   return (
@@ -275,6 +281,19 @@ function AddColumnModal({ onClose, onSave }: { onClose: () => void; onSave: (tit
               onKeyDown={e => e.key === 'Enter' && handleSave()}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
           </div>
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Color</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {COLUMN_COLORS.map(c => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className={clsx('w-7 h-7 rounded-full transition-all', color === c ? 'ring-2 ring-offset-2 ring-primary-500 scale-110' : 'hover:scale-105')}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
           <div className="flex gap-3">
             <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
             <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
@@ -287,7 +306,6 @@ function AddColumnModal({ onClose, onSave }: { onClose: () => void; onSave: (tit
     </motion.div>
   );
 }
-
 const priorityColors = {
   low: { bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' },
   medium: { bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' },
@@ -494,7 +512,7 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
           <DeleteCardModal card={deleteCardTarget} onClose={() => setDeleteCardTarget(null)} onDelete={deleteCard} />
         )}
         {showAddColumn && (
-          <AddColumnModal onClose={() => setShowAddColumn(false)} onSave={addColumn} />
+          <AddColumnModal onClose={() => setShowAddColumn(false)} onSave={async (title, color) => { await addColumn(title, color); }} />
         )}
       </AnimatePresence>
       {/* Toolbar */}

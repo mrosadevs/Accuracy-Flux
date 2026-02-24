@@ -21,8 +21,9 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
 
     // Send the invitation email via Supabase Auth
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '') || ''}/auth/callback?redirect=/portal`,
+      redirectTo: `${appUrl}/auth/callback?next=/portal`,
       data: {
         role: 'client',
         client_id: clientId,

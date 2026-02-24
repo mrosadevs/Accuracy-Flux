@@ -14,7 +14,7 @@ export default function LoginPage() {
   const supabase = useSupabase();
   const router = useRouter();
 
-  const [step, setStep] = useState<'login' | '2fa'>('login');
+  const [step, setStep] = useState<'login' | '2fa' | 'forgot'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,6 +23,7 @@ export default function LoginPage() {
   const [loginType, setLoginType] = useState<'staff' | 'client'>('staff');
   const [error, setError] = useState('');
   const [mfaFactorId, setMfaFactorId] = useState('');
+  const [resetSent, setResetSent] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -95,6 +96,20 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) { setError("Please enter your email address."); return; }
+    setIsLoading(true); setError("");
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: typeof window !== "undefined" ? window.location.origin + "/auth/callback" : "/auth/callback",
+      });
+      if (error) throw error;
+      setResetSent(true);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to send reset email");
+    } finally { setIsLoading(false); }
   };
 
   const handleCodeChange = (index: number, value: string) => {
@@ -285,7 +300,7 @@ export default function LoginPage() {
                       <input type="checkbox" className="w-4 h-4 rounded border-border text-primary-600 focus:ring-primary-500" />
                       <span className="text-xs text-text-secondary">Remember me</span>
                     </label>
-                    <button className="text-xs text-primary-600 hover:text-primary-700 font-medium">
+                    <button onClick={() => { setStep("forgot"); setError(""); setResetSent(false); }} className="text-xs text-primary-600 hover:text-primary-700 font-medium">
                       Forgot password?
                     </button>
                   </div>
@@ -313,7 +328,58 @@ export default function LoginPage() {
                 </div>
 
               </motion.div>
-            ) : (
+            ) : step === 'forgot' ? (
+              <motion.div
+                key="forgot"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="text-center"
+              >
+                {resetSent ? (
+                  <>
+                    <div className="w-16 h-16 rounded-2xl bg-success/10 flex items-center justify-center mx-auto mb-5">
+                      <CheckCircle2 className="w-8 h-8 text-success" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-text-primary mb-1">Check your email</h2>
+                    <p className="text-sm text-text-muted mb-8">We&apos;ve sent a password reset link to <strong>{email}</strong>.</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center mx-auto mb-5">
+                      <Key className="w-8 h-8 text-primary-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-text-primary mb-1">Reset Password</h2>
+                    <p className="text-sm text-text-muted mb-8 text-left">Enter your email and we&apos;ll send you a link to reset your password.</p>
+                    {error && (
+                      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+                        className="flex items-center gap-2 px-4 py-3 bg-danger/5 border border-danger/20 rounded-xl mb-4 text-sm text-danger text-left">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+                      </motion.div>
+                    )}
+                    <div className="space-y-4 text-left">
+                      <div>
+                        <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Email Address</label>
+                        <div className="relative">
+                          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                          <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleForgotPassword()} placeholder="you@example.com"
+                            className="w-full h-12 pl-10 pr-4 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
+                        </div>
+                      </div>
+                      <motion.button onClick={handleForgotPassword} disabled={isLoading} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
+                        className="w-full h-12 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-md shadow-primary-500/20 disabled:opacity-70">
+                        {isLoading ? (
+                          <motion.div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} />
+                        ) : (<><Mail className="w-4 h-4" />Send Reset Link</>)}
+                      </motion.button>
+                    </div>
+                  </>
+                )}
+                <button onClick={() => { setStep('login'); setError(''); setResetSent(false); }} className="mt-6 text-xs text-primary-600 hover:text-primary-700 font-medium">
+                  Back to login
+                </button>
+              </motion.div>
+) : (
               <motion.div
                 key="2fa"
                 initial={{ opacity: 0, x: 20 }}

@@ -138,12 +138,12 @@ export function useKanban(boardId?: string) {
     await fetchColumns();
   }
 
-  async function addColumn(title: string) {
+  async function addColumn(title: string, color: string = "#64748b") {
     if (!configured) {
       const newCol: ColumnWithCards = {
         id: `col-${Date.now()}`,
         title,
-        color: "#64748b",
+        color,
         sort_order: columns.length,
         board_id: boardId ?? null,
         wip_limit: null,
@@ -156,7 +156,7 @@ export function useKanban(boardId?: string) {
     const maxOrder = columns.reduce((m, c) => Math.max(m, c.sort_order ?? 0), 0);
     const { error } = await supabase.from("kanban_columns").insert({
       title,
-      color: "#64748b",
+      color,
       sort_order: maxOrder + 1,
       board_id: boardId ?? null,
     });

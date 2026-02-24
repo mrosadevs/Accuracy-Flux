@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { WorkItem } from '@/lib/types/database';
+import { useClients } from '@/lib/hooks/use-clients';
+import { useTeamMembers } from '@/lib/hooks/use-profile';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: any }> = {
   'not-started': { label: 'Not Started', color: 'text-text-muted', bg: 'bg-text-muted/10', icon: Pause },
@@ -38,6 +40,8 @@ const typeConfig: Record<string, { label: string; color: string }> = {
 
 /* â”€â”€â”€ New Work Item Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Partial<WorkItem>) => Promise<void> }) {
+  const { clients } = useClients();
+  const { members } = useTeamMembers();
   const [title, setTitle] = useState('');
   const [clientName, setClientName] = useState('');
   const [type, setType] = useState<WorkItem['type']>('tax-return');
@@ -83,9 +87,12 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
           </div>
           <div>
-            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client Name</label>
-            <input type="text" placeholder="Johnson & Associates LLC" value={clientName} onChange={e => setClientName(e.target.value)}
-              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client</label>
+            <select value={clientName} onChange={e => setClientName(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+              <option value="">No client</option>
+              {clients.map(c => <option key={c.id} value={c.name}>{c.name}{c.company ? ` â€” ${c.company}` : ''}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -123,8 +130,11 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
             </div>
             <div>
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assignee</label>
-              <input type="text" placeholder="Sarah Chen" value={assignee} onChange={e => setAssignee(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
+              <select value={assignee} onChange={e => setAssignee(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="">Unassigned</option>
+                {members.map(m => <option key={m.id} value={m.name}>{m.name} ({m.role})</option>)}
+              </select>
             </div>
             <div>
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Start Date</label>
@@ -167,6 +177,8 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
 
 /* ─── Edit Work Item Modal ──────────────────────────────────────── */
 function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks; onClose: () => void; onSave: (id: string, updates: Partial<WorkItem>) => Promise<void> }) {
+  const { clients } = useClients();
+  const { members } = useTeamMembers();
   const [title, setTitle] = useState(item.title);
   const [clientName, setClientName] = useState(item.client_name);
   const [type, setType] = useState<WorkItem['type']>(item.type);
@@ -212,9 +224,12 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
           </div>
           <div>
-            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client Name</label>
-            <input type="text" value={clientName} onChange={e => setClientName(e.target.value)}
-              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client</label>
+            <select value={clientName} onChange={e => setClientName(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+              <option value="">No client</option>
+              {clients.map(c => <option key={c.id} value={c.name}>{c.name}{c.company ? ` â€” ${c.company}` : ''}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -252,8 +267,11 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
             </div>
             <div>
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assignee</label>
-              <input type="text" value={assignee} onChange={e => setAssignee(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+              <select value={assignee} onChange={e => setAssignee(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="">Unassigned</option>
+                {members.map(m => <option key={m.id} value={m.name}>{m.name} ({m.role})</option>)}
+              </select>
             </div>
             <div>
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Start Date</label>
@@ -403,7 +421,7 @@ export default function WorkPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 layout
-                className="bg-white rounded-2xl border border-border overflow-hidden hover:shadow-md hover:shadow-primary-500/5 transition-all"
+                className="bg-white rounded-2xl border border-border hover:shadow-md hover:shadow-primary-500/5 transition-all"
               >
                 {/* Main Row */}
                 <div
