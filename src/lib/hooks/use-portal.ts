@@ -2,7 +2,16 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSupabase, isSupabaseConfigured } from './use-supabase';
-import type { PortalDocument, PortalMessage } from '@/lib/types/database';
+import type { PortalDocument, PortalMessage, Client } from '@/lib/types/database';
+
+export interface PortalWorkItem {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  due_date: string | null;
+  type: string;
+}
 
 export function usePortal(clientId?: string) {
   const supabase = useSupabase();
@@ -12,18 +21,16 @@ export function usePortal(clientId?: string) {
   const configured = isSupabaseConfigured();
 
   const fetchData = useCallback(async () => {
-    if (!configured) {
+    if (!configured || !clientId) {
       setDocuments([]);
       setMessages([]);
       setLoading(false);
       return;
     }
 
-    const id = clientId ?? 'portal';
-
     const [{ data: docs }, { data: msgs }] = await Promise.all([
-      supabase.from('portal_documents').select('*').eq('client_id', id).order('created_at', { ascending: false }),
-      supabase.from('portal_messages').select('*').eq('client_id', id).order('created_at'),
+      supabase.from('portal_documents').select('*').eq('client_id', clientId).order('created_at', { ascending: false }),
+      supabase.from('portal_messages').select('*').eq('client_id', clientId).order('created_at'),
     ]);
 
     setDocuments(docs ?? []);
@@ -33,12 +40,11 @@ export function usePortal(clientId?: string) {
 
   useEffect(() => {
     fetchData();
-    if (!configured) return;
-    const id = clientId ?? 'portal';
+    if (!configured || !clientId) return;
     const channel = supabase
-      .channel(`portal-${id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'portal_messages', filter: `client_id=eq.${id}` }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'portal_documents', filter: `client_id=eq.${id}` }, fetchData)
+      .channel(`portal-${clientId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'portal_messages', filter: `client_id=eq.${clientId}` }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'portal_documents', filter: `client_id=eq.${clientId}` }, fetchData)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchData, supabase, configured, clientId]);
@@ -77,4 +83,45 @@ export function usePortal(clientId?: string) {
   }
 
   return { documents, messages, loading, uploadDocument, getDownloadUrl, sendMessage, refetch: fetchData };
+}
+
+// Hook to load the current portal user's linked client + their work items
+export function usePortalClient() {
+  const supabase = useSupabase();
+  const configured = isSupabaseConfigured();
+  const [client, setClient] = useState<Client | null>(null);
+  const [workItems, setWorkItems] = useState<PortalWorkItem[]>([]);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      if (!configured) { setAuthLoading(false); return; }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setAuthLoading(false); return; }
+
+      // Find the client record linked to this portal user
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('portal_user_id', user.id)
+        .single();
+
+      if (clientData) {
+        setClient(clientData);
+        // Load work items assigned to this client
+        const { data: items } = await supabase
+          .from('work_items')
+          .select('id, title, status, priority, due_date, type')
+          .eq('client_id', clientData.id)
+          .order('created_at', { ascending: false });
+        setWorkItems(items ?? []);
+      }
+
+      setAuthLoading(false);
+    }
+    load();
+  }, [supabase, configured]);
+
+  return { client, workItems, authLoading };
 }
