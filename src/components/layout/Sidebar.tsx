@@ -16,7 +16,7 @@ const navItems = [
   { href: '/work', icon: Briefcase, label: 'Work', badge: null },
   { href: '/kanban', icon: KanbanSquare, label: 'Board', badge: null },
   { href: '/clients', icon: Users, label: 'Clients', badge: null },
-  { href: '/email', icon: Mail, label: 'Triage', badge: '3' },
+  { href: '/email', icon: Mail, label: 'Triage', badge: null },
   { href: '/time-billing', icon: Clock, label: 'Time & Billing', badge: null },
 ];
 

@@ -72,8 +72,11 @@ export function useTimeEntries() {
     if (data) {
       setEntries(
         data
-          // Filter out blank/orphan rows (e.g. test data with no description)
-          .filter((e: Record<string, unknown>) => e.description && (e.hours as number) > 0)
+          // Filter out blank/orphan rows (no description, whitespace-only, or 0 hours)
+          .filter((e: Record<string, unknown>) => {
+            const desc = (e.description as string | null)?.trim();
+            return !!(desc && (e.hours as number) > 0);
+          })
           .map((e: Record<string, unknown>) => ({
             ...(e as unknown as TimeEntry),
             user_name: (e.profiles as { name?: string } | null)?.name ?? "Me",

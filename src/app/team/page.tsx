@@ -80,11 +80,22 @@ function InviteStaffModal({ onClose }: { onClose: () => void }) {
                 <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Email *</label>
                 <input
                   type="text"
-                  autoComplete="new-password"
+                  autoComplete="off"
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                   placeholder="jane@yourfirm.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   onFocus={e => { const len = e.target.value.length; e.target.setSelectionRange(len, len); }}
+                  onKeyUp={e => {
+                    // If a password manager selected all text, move cursor back to end
+                    const t = e.currentTarget;
+                    if (t.selectionStart === 0 && t.selectionEnd === t.value.length && t.value.length > 0) {
+                      t.setSelectionRange(t.value.length, t.value.length);
+                    }
+                  }}
                   className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted"
                 />
               </div>
