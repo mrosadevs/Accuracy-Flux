@@ -54,7 +54,7 @@ export function useNotifications() {
           subtitle: ((m.message as string) || "").slice(0, 60) + (((m.message as string) || "").length > 60 ? "…" : ""),
           time: formatAgo(m.created_at as string),
           read: !!(m.read_at as string | null),
-          href: "/email",
+          href: "/portals",
         };
       }));
     }

@@ -29,7 +29,7 @@ const roleBadgeColors: Record<string, string> = {
 };
 
 const bottomItems = [
-  { href: '/portal', icon: Upload, label: 'Client Portal' },
+  { href: '/portals', icon: Upload, label: 'Client Portals' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ];
 
