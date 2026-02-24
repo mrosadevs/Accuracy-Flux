@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useSupabase, isSupabaseConfigured } from './use-supabase';
-import { useProfile } from './use-profile';
+import { useState, useEffect, useCallback } from "react";
+import { useSupabase, isSupabaseConfigured } from "./use-supabase";
+import { useProfile } from "./use-profile";
 
 export interface InternalThread {
   id: string;
@@ -46,35 +46,35 @@ export function useTriage() {
   const fetchThreads = useCallback(async () => {
     if (!configured) { setLoading(false); return; }
     const { data } = await supabase
-      .from('internal_threads')
-      .select('*')
-      .order('last_message_at', { ascending: false });
+      .from("internal_threads")
+      .select("*")
+      .order("last_message_at", { ascending: false });
     setThreads(data ?? []);
   }, [supabase, configured]);
 
   const fetchMessages = useCallback(async (threadId: string) => {
     if (!configured) return;
     const { data } = await supabase
-      .from('internal_messages')
-      .select('*')
-      .eq('thread_id', threadId)
-      .order('created_at');
+      .from("internal_messages")
+      .select("*")
+      .eq("thread_id", threadId)
+      .order("created_at");
     setMessages(data ?? []);
   }, [supabase, configured]);
 
   const fetchPortalNotifications = useCallback(async () => {
     if (!configured) return;
     const { data } = await supabase
-      .from('portal_messages')
-      .select('*, clients(name)')
-      .eq('is_from_client', true)
-      .order('created_at', { ascending: false })
+      .from("portal_messages")
+      .select("*, clients(name)")
+      .eq("is_from_client", true)
+      .order("created_at", { ascending: false })
       .limit(30);
     if (data) {
       setPortalNotifications(data.map((m: Record<string, unknown>) => ({
         id: m.id as string,
         client_id: m.client_id as string,
-        client_name: (m.clients as { name?: string } | null)?.name ?? 'Unknown Client',
+        client_name: (m.clients as { name?: string } | null)?.name ?? "Unknown Client",
         sender_name: m.sender_name as string | null,
         message: m.message as string,
         created_at: m.created_at as string,
@@ -92,9 +92,9 @@ export function useTriage() {
     init();
     if (!configured) return;
     const channel = supabase
-      .channel('triage-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'internal_threads' }, fetchThreads)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'portal_messages' }, fetchPortalNotifications)
+      .channel("triage-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "internal_threads" }, fetchThreads)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "portal_messages" }, fetchPortalNotifications)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchThreads, fetchPortalNotifications, supabase, configured]);
@@ -105,8 +105,8 @@ export function useTriage() {
     if (!configured) return;
     const channel = supabase
       .channel(`thread-msgs-${selectedThreadId}`)
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'internal_messages',
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "internal_messages",
         filter: `thread_id=eq.${selectedThreadId}`,
       }, () => fetchMessages(selectedThreadId))
       .subscribe();
@@ -116,7 +116,7 @@ export function useTriage() {
   async function createThread(title: string, firstMessage: string) {
     if (!configured || !profile) return null;
     const { data: thread, error } = await supabase
-      .from('internal_threads')
+      .from("internal_threads")
       .insert({
         title,
         created_by: profile.id,
@@ -126,7 +126,7 @@ export function useTriage() {
       })
       .select().single();
     if (error) throw error;
-    await supabase.from('internal_messages').insert({
+    await supabase.from("internal_messages").insert({
       thread_id: thread.id,
       sender_id: profile.id,
       sender_name: profile.name,
@@ -139,26 +139,34 @@ export function useTriage() {
 
   async function sendMessage(threadId: string, content: string) {
     if (!configured || !profile) return;
-    await supabase.from('internal_messages').insert({
+    await supabase.from("internal_messages").insert({
       thread_id: threadId,
       sender_id: profile.id,
       sender_name: profile.name,
       content,
     });
-    await supabase.from('internal_threads').update({
+    await supabase.from("internal_threads").update({
       last_message_at: new Date().toISOString(),
       last_message_preview: content.slice(0, 120),
-    }).eq('id', threadId);
+    }).eq("id", threadId);
     await fetchMessages(threadId);
+    await fetchThreads();
+  }
+
+  async function deleteThread(threadId: string) {
+    if (!configured) return;
+    const { error } = await supabase.from("internal_threads").delete().eq("id", threadId);
+    if (error) throw error;
+    if (selectedThreadId === threadId) setSelectedThreadId(null);
     await fetchThreads();
   }
 
   async function markPortalRead(messageId: string) {
     if (!configured) return;
     await supabase
-      .from('portal_messages')
+      .from("portal_messages")
       .update({ read_at: new Date().toISOString() })
-      .eq('id', messageId);
+      .eq("id", messageId);
     await fetchPortalNotifications();
   }
 
@@ -167,7 +175,7 @@ export function useTriage() {
   return {
     threads, messages, portalNotifications, loading,
     selectedThreadId, setSelectedThreadId,
-    createThread, sendMessage, markPortalRead,
+    createThread, sendMessage, deleteThread, markPortalRead,
     unreadPortalCount,
     refetchThreads: fetchThreads,
   };

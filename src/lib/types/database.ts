@@ -95,10 +95,11 @@ export interface Database {
       kanban_columns: {
         Row: {
           id: string;
-          board_id: string;
+          board_id: string | null;
           title: string;
           color: string;
           sort_order: number;
+          wip_limit: number | null;
           created_at: string;
         };
         Insert: Omit<Database['public']['Tables']['kanban_columns']['Row'], 'id' | 'created_at'>;

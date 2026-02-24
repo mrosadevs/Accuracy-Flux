@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTimeEntries } from '@/lib/hooks/use-time-entries';
@@ -188,6 +188,17 @@ export default function TimeBillingPage() {
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [showStartTimer, setShowStartTimer] = useState(false);
   const [stoppingTimer, setStoppingTimer] = useState(false);
+
+  // Auto-open timer from TopBar quick action
+  useEffect(() => {
+    try {
+      const action = localStorage.getItem('af-auto-open');
+      if (action === 'start-timer') {
+        localStorage.removeItem('af-auto-open');
+        setShowStartTimer(true);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   async function handleStopTimer() {
     setStoppingTimer(true);

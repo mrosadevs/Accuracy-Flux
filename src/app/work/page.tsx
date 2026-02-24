@@ -1,11 +1,11 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useWorkItems } from '@/lib/hooks/use-work-items';
+import { useWorkItems, type WorkItemWithTasks } from '@/lib/hooks/use-work-items';
 import {
-  Search, Filter, Plus, MoreHorizontal, ChevronDown, ChevronRight,
+  Search, Filter, Plus, MoreHorizontal, ChevronDown, ChevronRight, Pencil, Trash2,
   Calendar, Clock, CheckCircle2, X, AlertCircle, Loader2 as Loader,
   Pause, Play, Eye, ArrowUpDown, Loader2, DollarSign
 } from 'lucide-react';
@@ -36,7 +36,7 @@ const typeConfig: Record<string, { label: string; color: string }> = {
   'onboarding': { label: 'Onboarding', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
 };
 
-/* ─── New Work Item Modal ───────────────────────────────────────────── */
+/* â”€â”€â”€ New Work Item Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Partial<WorkItem>) => Promise<void> }) {
   const [title, setTitle] = useState('');
   const [clientName, setClientName] = useState('');
@@ -164,11 +164,170 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
   );
 }
 
+
+/* ─── Edit Work Item Modal ──────────────────────────────────────── */
+function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks; onClose: () => void; onSave: (id: string, updates: Partial<WorkItem>) => Promise<void> }) {
+  const [title, setTitle] = useState(item.title);
+  const [clientName, setClientName] = useState(item.client_name);
+  const [type, setType] = useState<WorkItem['type']>(item.type);
+  const [priority, setPriority] = useState<WorkItem['priority']>(item.priority);
+  const [status, setStatus] = useState<WorkItem['status']>(item.status);
+  const [assignee, setAssignee] = useState(item.assignee);
+  const [dueDate, setDueDate] = useState(item.due_date ?? '');
+  const [startDate, setStartDate] = useState(item.start_date ?? '');
+  const [budget, setBudget] = useState(String(item.budget));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSave() {
+    if (!title.trim()) { setError('Title is required.'); return; }
+    setSaving(true); setError('');
+    try {
+      await onSave(item.id, { title: title.trim(), client_name: clientName.trim(), type, priority, status, assignee: assignee.trim(), due_date: dueDate || null, start_date: startDate || null, budget: parseFloat(budget) || 0 });
+      onClose();
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed to update work item'); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border sticky top-0 bg-white z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+              <Pencil className="w-4 h-4 text-white" />
+            </div>
+            <h2 className="text-sm font-bold text-text-primary">Edit Work Item</h2>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors"><X className="w-4 h-4 text-text-muted" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {error && <div className="flex items-center gap-2 px-3 py-2.5 bg-danger/5 border border-danger/20 rounded-xl text-xs text-danger"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{error}</div>}
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Title *</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client Name</label>
+            <input type="text" value={clientName} onChange={e => setClientName(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Type</label>
+              <select value={type} onChange={e => setType(e.target.value as WorkItem['type'])}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="tax-return">Tax Return</option>
+                <option value="bookkeeping">Bookkeeping</option>
+                <option value="payroll">Payroll</option>
+                <option value="advisory">Advisory</option>
+                <option value="audit">Audit</option>
+                <option value="onboarding">Onboarding</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Priority</label>
+              <select value={priority} onChange={e => setPriority(e.target.value as WorkItem['priority'])}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Status</label>
+              <select value={status} onChange={e => setStatus(e.target.value as WorkItem['status'])}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="not-started">Not Started</option>
+                <option value="in-progress">In Progress</option>
+                <option value="waiting-on-client">Waiting on Client</option>
+                <option value="in-review">In Review</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assignee</label>
+              <input type="text" value={assignee} onChange={e => setAssignee(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Start Date</label>
+              <div className="relative"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                  className="w-full h-10 pl-8 pr-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" /></div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Due Date</label>
+              <div className="relative"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                  className="w-full h-10 pl-8 pr-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" /></div>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Budget ($)</label>
+            <div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+              <input type="number" value={budget} onChange={e => setBudget(e.target.value)} min="0" step="0.01"
+                className="w-full h-10 pl-8 pr-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" /></div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
+            <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex-1 h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-70">
+              {saving ? <Loader className="w-4 h-4 animate-spin" /> : <><Pencil className="w-3.5 h-3.5" />Save Changes</>}
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ─── Delete Work Item Modal ────────────────────────────────────────── */
+function DeleteWorkItemModal({ item, onClose, onDelete }: { item: WorkItemWithTasks; onClose: () => void; onDelete: (id: string) => Promise<void> }) {
+  const [deleting, setDeleting] = useState(false);
+  async function handleDelete() {
+    setDeleting(true);
+    try { await onDelete(item.id); onClose(); } catch { setDeleting(false); }
+  }
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-6 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-danger/10 flex items-center justify-center mx-auto mb-4">
+            <Trash2 className="w-6 h-6 text-danger" />
+          </div>
+          <h2 className="text-base font-bold text-text-primary mb-1">Delete Work Item?</h2>
+          <p className="text-sm text-text-muted mb-6">This will permanently delete <strong>{item.title}</strong> and all associated tasks.</p>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
+            <motion.button onClick={handleDelete} disabled={deleting} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex-1 h-10 rounded-xl bg-danger hover:bg-red-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-70">
+              {deleting ? <Loader className="w-4 h-4 animate-spin" /> : <><Trash2 className="w-3.5 h-3.5"  />Delete</>}
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+
 export default function WorkPage() {
-  const { workItems, loading, updateTaskCompletion, addWorkItem } = useWorkItems();
+  const { workItems, loading, updateTaskCompletion, addWorkItem, updateWorkItem, deleteWorkItem } = useWorkItems();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewItem, setShowNewItem] = useState(false);
+  const [editItem, setEditItem] = useState<WorkItemWithTasks | null>(null);
+  const [deleteItem, setDeleteItem] = useState<WorkItemWithTasks | null>(null);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   const filteredItems = workItems.filter(item =>
     item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -179,6 +338,8 @@ export default function WorkPage() {
     <AppShell title="Work" subtitle={`${workItems.length} active work items`}>
       <AnimatePresence>
         {showNewItem && <NewWorkItemModal onClose={() => setShowNewItem(false)} onSave={addWorkItem} />}
+        {editItem && <EditWorkItemModal item={editItem} onClose={() => setEditItem(null)} onSave={async (id, updates) => { await updateWorkItem(id, updates); }} />}
+        {deleteItem && <DeleteWorkItemModal item={deleteItem} onClose={() => setDeleteItem(null)} onDelete={async (id) => { await deleteWorkItem(id); }} />}
       </AnimatePresence>
       <div className="max-w-[1800px] mx-auto">
         {/* Toolbar */}
@@ -311,9 +472,24 @@ export default function WorkPage() {
                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-[9px] font-bold text-white">
                       {item.assignee.split(' ').map(n => n[0]).join('')}
                     </div>
-                    <button className="p-1 hover:bg-surface-hover rounded" onClick={(e) => e.stopPropagation()}>
-                      <MoreHorizontal className="w-4 h-4 text-text-muted" />
-                    </button>
+                    <div className="relative">
+                      <button className="p-1 hover:bg-surface-hover rounded" onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === item.id ? null : item.id); }}>
+                        <MoreHorizontal className="w-4 h-4 text-text-muted" />
+                      </button>
+                      {activeMenu === item.id && (
+                        <>
+                          <div className="fixed inset-0 z-20" onClick={() => setActiveMenu(null)} />
+                          <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl border border-border shadow-xl overflow-hidden z-30">
+                            <button onClick={e => { e.stopPropagation(); setActiveMenu(null); setEditItem(item); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-surface-hover transition-colors">
+                              <Pencil className="w-3.5 h-3.5 text-amber-500" />Edit
+                            </button>
+                            <button onClick={e => { e.stopPropagation(); setActiveMenu(null); setDeleteItem(item); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/5 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -392,11 +568,11 @@ export default function WorkPage() {
                               </div>
                               <div className="flex items-center justify-between py-2 border-b border-border-light">
                                 <span className="text-xs text-text-muted">Start Date</span>
-                                <span className="text-sm text-text-primary">{item.start_date ? new Date(item.start_date).toLocaleDateString() : '—'}</span>
+                                <span className="text-sm text-text-primary">{item.start_date ? new Date(item.start_date).toLocaleDateString() : 'â€”'}</span>
                               </div>
                               <div className="flex items-center justify-between py-2 border-b border-border-light">
                                 <span className="text-xs text-text-muted">Due Date</span>
-                                <span className="text-sm font-semibold text-text-primary">{item.due_date ? new Date(item.due_date).toLocaleDateString() : '—'}</span>
+                                <span className="text-sm font-semibold text-text-primary">{item.due_date ? new Date(item.due_date).toLocaleDateString() : 'â€”'}</span>
                               </div>
                               <div className="flex items-center justify-between py-2">
                                 <span className="text-xs text-text-muted">Assignee</span>

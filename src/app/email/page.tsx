@@ -7,7 +7,7 @@ import { useTriage, type InternalThread, type PortalNotification } from '@/lib/h
 import { useProfile } from '@/lib/hooks/use-profile';
 import { isSupabaseConfigured } from '@/lib/hooks/use-supabase';
 import {
-  MessageSquare, Plus, Send, X, Users, Bell,
+  MessageSquare, Plus, Send, X, Users, Bell, Trash2,
   Loader2, AlertCircle, ChevronRight, CheckCheck, MessagesSquare
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -91,8 +91,9 @@ function NewThreadModal({ onClose, onCreate }: { onClose: () => void; onCreate: 
     </motion.div>
   );
 }
-function ThreadItem({ thread, active, onClick }: { thread: InternalThread; active: boolean; onClick: () => void }) {
+function ThreadItem({ thread, active, onClick, onDelete }: { thread: InternalThread; active: boolean; onClick: () => void; onDelete: () => void }) {
   return (
+    <div className="relative group/thread">
     <button onClick={onClick}
       className={clsx('w-full text-left px-3 py-3 rounded-xl transition-all group', active ? 'bg-primary-50 border border-primary-200' : 'hover:bg-surface-hover border border-transparent')}>
       <div className="flex items-start gap-2.5">
@@ -108,6 +109,10 @@ function ThreadItem({ thread, active, onClick }: { thread: InternalThread; activ
         </div>
       </div>
     </button>
+      <button onClick={e => { e.stopPropagation(); onDelete(); }} className="absolute top-2 right-2 p-1 rounded-lg text-danger hover:bg-danger/10 opacity-0 group-hover/thread:opacity-100 transition-opacity z-10">
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
   );
 }
 
@@ -135,11 +140,12 @@ function NotificationItem({ notif, active, onClick }: { notif: PortalNotificatio
 }
 export default function TriagePage() {
   const { profile } = useProfile();
-  const { threads, messages, portalNotifications, loading, selectedThreadId, setSelectedThreadId, createThread, sendMessage, markPortalRead, unreadPortalCount } = useTriage();
+  const { threads, messages, portalNotifications, loading, selectedThreadId, setSelectedThreadId, createThread, sendMessage, deleteThread, markPortalRead, unreadPortalCount } = useTriage();
   const [tab, setTab] = useState<'team' | 'clients'>('team');
   const [showNewThread, setShowNewThread] = useState(false);
   const [messageInput, setMessageInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [deleteThreadId, setDeleteThreadId] = useState<string | null>(null);
   const [selectedNotif, setSelectedNotif] = useState<PortalNotification | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const configured = isSupabaseConfigured();
@@ -153,6 +159,12 @@ export default function TriagePage() {
     setSending(true);
     try { await sendMessage(selectedThreadId, messageInput.trim()); setMessageInput(''); }
     finally { setSending(false); }
+  }
+
+  async function handleDeleteThread(threadId: string) {
+    if (!confirm('Delete this thread? This cannot be undone.')) return;
+    try { await deleteThread(threadId); } catch (e) { console.error(e); }
+    setDeleteThreadId(null);
   }
 
   async function handleSelectNotif(notif: PortalNotification) {
@@ -218,7 +230,8 @@ export default function TriagePage() {
                 </div>
               ) : threads.map(thread => (
                 <ThreadItem key={thread.id} thread={thread} active={selectedThreadId === thread.id}
-                  onClick={() => { setSelectedThreadId(thread.id); setSelectedNotif(null); }} />
+                  onClick={() => { setSelectedThreadId(thread.id); setSelectedNotif(null); }}
+                  onDelete={() => handleDeleteThread(thread.id)} />
               ))
             ) : (
               portalNotifications.length === 0 ? (

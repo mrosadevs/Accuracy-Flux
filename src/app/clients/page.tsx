@@ -4,7 +4,7 @@ import { useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Plus, MoreHorizontal, Mail, Phone, Building2,
+  Search, Plus, MoreHorizontal, Mail, Phone, Building2, Pencil, Trash2,
   LayoutGrid, List, Send, X, FileText, Receipt, CheckCircle,
   Calendar, DollarSign, AlertCircle, Loader2, UserPlus, Lock
 } from 'lucide-react';
@@ -315,13 +315,143 @@ function InvitePortalModal({ client, onClose }: { client: Client; onClose: () =>
 }
 
 /* ─── Clients Page ──────────────────────────────────────────────────── */
+
+/* ─── Edit Client Modal ────────────────────────────────────────── */
+function EditClientModal({ client, onClose, onSave }: { client: Client; onClose: () => void; onSave: (id: string, data: Partial<Client>) => Promise<void> }) {
+  const [name, setName] = useState(client.name);
+  const [company, setCompany] = useState(client.company ?? "");
+  const [email, setEmail] = useState(client.email);
+  const [phone, setPhone] = useState(client.phone ?? "");
+  const [status, setStatus] = useState<Client["status"]>(client.status);
+  const [assignedTo, setAssignedTo] = useState(client.assigned_to ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave() {
+    if (!name.trim()) { setError("Client name is required."); return; }
+    setSaving(true); setError("");
+    try {
+      await onSave(client.id, { name: name.trim(), company: company.trim(), email: email.trim(), phone: phone.trim(), status, assigned_to: assignedTo.trim() });
+      onClose();
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Failed to update client"); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+              <Pencil className="w-4 h-4 text-white" />
+            </div>
+            <h2 className="text-sm font-bold text-text-primary">Edit Client</h2>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors"><X className="w-4 h-4 text-text-muted" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {error && <div className="flex items-center gap-2 px-3 py-2.5 bg-danger/5 border border-danger/20 rounded-xl text-xs text-danger"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{error}</div>}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Full Name *</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Company</label>
+              <input type="text" value={company} onChange={e => setCompany(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Email *</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Phone</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Status</label>
+              <select value={status} onChange={e => setStatus(e.target.value as Client["status"])}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="active">Active</option>
+                <option value="onboarding">Onboarding</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assigned To</label>
+              <input type="text" value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
+            <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex-1 h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-70">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Pencil className="w-3.5 h-3.5" />Save Changes</>}
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ─── Delete Client Modal ─────────────────────────────────────── */
+function DeleteClientModal({ client, onClose, onDelete }: { client: Client; onClose: () => void; onDelete: (id: string) => Promise<void> }) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleDelete() {
+    setDeleting(true); setError("");
+    try { await onDelete(client.id); onClose(); }
+    catch (err: unknown) { setError(err instanceof Error ? err.message : "Failed to delete client"); }
+    finally { setDeleting(false); }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-6 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-danger/10 flex items-center justify-center mx-auto mb-4">
+            <Trash2 className="w-6 h-6 text-danger" />
+          </div>
+          <h2 className="text-base font-bold text-text-primary mb-1">Delete Client?</h2>
+          <p className="text-sm text-text-muted mb-1">This will permanently delete <strong>{client.name}</strong>.</p>
+          <p className="text-xs text-text-muted mb-6">Associated invoices and data will also be removed.</p>
+          {error && <div className="flex items-center gap-2 px-3 py-2.5 bg-danger/5 border border-danger/20 rounded-xl text-xs text-danger mb-4"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{error}</div>}
+          <div className="flex gap-3">
+            <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
+            <motion.button onClick={handleDelete} disabled={deleting} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex-1 h-10 rounded-xl bg-danger hover:bg-red-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-70">
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Trash2 className="w-3.5 h-3.5" />Delete</>}
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+
 export default function ClientsPage() {
-  const { clients, loading, addClient } = useClients();
+  const { clients, loading, addClient, updateClient, deleteClient } = useClients();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [invoiceClient, setInvoiceClient] = useState<Client | null>(null);
   const [showNewClient, setShowNewClient] = useState(false);
+  const [editClient, setEditClient] = useState<Client | null>(null);
+  const [deleteClientTarget, setDeleteClientTarget] = useState<Client | null>(null);
   const [inviteClient, setInviteClient] = useState<Client | null>(null);
 
   const filteredClients = clients.filter(c => {
@@ -338,6 +468,8 @@ export default function ClientsPage() {
       <AnimatePresence>
         {invoiceClient && <InvoiceModal client={invoiceClient} onClose={() => setInvoiceClient(null)} />}
         {showNewClient && <NewClientModal onClose={() => setShowNewClient(false)} onSave={addClient} />}
+        {editClient && <EditClientModal client={editClient} onClose={() => setEditClient(null)} onSave={updateClient} />}
+        {deleteClientTarget && <DeleteClientModal client={deleteClientTarget} onClose={() => setDeleteClientTarget(null)} onDelete={deleteClient} />}
         {inviteClient && <InvitePortalModal client={inviteClient} onClose={() => setInviteClient(null)} />}
       </AnimatePresence>
 
@@ -446,6 +578,10 @@ export default function ClientsPage() {
                     <Lock className="w-3 h-3" />{client.portal_user_id ? 'Portal ✓' : 'Portal Invite'}
                   </motion.button>
                 </div>
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <motion.button onClick={e => { e.stopPropagation(); setEditClient(client); }} whileHover={{ scale: 1.1 }} className="p-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors"><Pencil className="w-3 h-3" /></motion.button>
+                  <motion.button onClick={e => { e.stopPropagation(); setDeleteClientTarget(client); }} whileHover={{ scale: 1.1 }} className="p-1.5 bg-danger hover:bg-red-700 text-white rounded-lg transition-colors"><Trash2 className="w-3 h-3" /></motion.button>
+                </div>
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-2xl bg-gradient-to-r from-primary-400 via-accent-400 to-pink-400 opacity-0 group-hover:opacity-100 transition-opacity" />
               </motion.div>
             ))}
@@ -487,7 +623,8 @@ export default function ClientsPage() {
                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-green-600 hover:bg-green-50 transition-colors opacity-0 group-hover:opacity-100">
                     <Lock className="w-3 h-3" />Portal
                   </motion.button>
-                  <button className="p-1 hover:bg-surface-hover rounded"><MoreHorizontal className="w-4 h-4 text-text-muted" /></button>
+                  <motion.button onClick={e => { e.stopPropagation(); setEditClient(client); }} whileHover={{ scale: 1.05 }} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-amber-600 hover:bg-amber-50 transition-colors opacity-0 group-hover:opacity-100"><Pencil className="w-3 h-3" />Edit</motion.button>
+                  <motion.button onClick={e => { e.stopPropagation(); setDeleteClientTarget(client); }} whileHover={{ scale: 1.05 }} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-danger hover:bg-danger/5 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-3 h-3" />Delete</motion.button>
                 </div>
               </motion.div>
             ))}

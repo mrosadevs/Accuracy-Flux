@@ -4,23 +4,13 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell, Plus, ChevronDown, Calendar, Clock,
-  FileText, User, Sparkles, Menu, Sun, Moon
+  FileText, User, Sparkles, Menu, Sun, Moon, Play, Check
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
-
-const quickActions = [
-  { icon: FileText, label: 'New Work Item', color: 'text-primary-600' },
-  { icon: User, label: 'Add Client', color: 'text-accent-600' },
-  { icon: Calendar, label: 'Schedule Meeting', color: 'text-pink-500' },
-  { icon: Clock, label: 'Start Timer', color: 'text-success' },
-];
-
-const notifications = [
-  { id: 1, title: 'Tax return ready for review', subtitle: 'Patricia Brown - Individual Return', time: '5 min ago', read: false },
-  { id: 2, title: 'New document uploaded', subtitle: 'Chen Wei uploaded 3 files', time: '1 hour ago', read: false },
-  { id: 3, title: 'Payment received', subtitle: 'Maria Garcia - $1,200.00', time: '2 hours ago', read: true },
-  { id: 4, title: 'Due date approaching', subtitle: 'Hassan Medical Payroll - Feb 28', time: '3 hours ago', read: true },
-];
+import { useActiveTimer } from '@/lib/hooks/use-active-timer';
+import { useNotifications } from '@/lib/hooks/use-notifications';
+import { useRouter } from 'next/navigation';
+import clsx from 'clsx';
 
 interface TopBarProps {
   title: string;
@@ -32,180 +22,224 @@ export default function TopBar({ title, subtitle, onMenuClick }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { activeTimer, elapsedFormatted } = useActiveTimer();
+  const { notifications, unreadCount, markAllRead } = useNotifications();
+  const router = useRouter();
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  function openAI() {
+    window.dispatchEvent(new CustomEvent('open-ai-assistant'));
+  }
+
+  function quickAction(action: string) {
+    setShowQuickActions(false);
+    if (action === 'work') {
+      try { localStorage.setItem('af-auto-open', 'new-work-item'); } catch { /* ignore */ }
+      router.push('/work');
+    } else if (action === 'client') {
+      try { localStorage.setItem('af-auto-open', 'new-client'); } catch { /* ignore */ }
+      router.push('/clients');
+    } else if (action === 'timer') {
+      try { localStorage.setItem('af-auto-open', 'start-timer'); } catch { /* ignore */ }
+      router.push('/time-billing');
+    } else if (action === 'meeting') {
+      router.push('/work');
+    }
+  }
+
+  const quickActions = [
+    { id: 'work', icon: FileText, label: 'New Work Item', color: 'text-primary-600' },
+    { id: 'client', icon: User, label: 'Add Client', color: 'text-accent-600' },
+    { id: 'meeting', icon: Calendar, label: 'Schedule Meeting', color: 'text-pink-500' },
+    { id: 'timer', icon: Clock, label: 'Start Timer', color: 'text-success' },
+  ];
 
   return (
-    <header className="h-16 bg-surface/80 backdrop-blur-xl border-b border-border sticky top-0 z-40 flex items-center justify-between px-4 md:px-6">
-      {/* Left: Page Title */}
+    <div className="h-16 flex items-center justify-between px-6 border-b border-border bg-white flex-shrink-0">
+      {/* Left: Menu + Title */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={onMenuClick}
-          className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-surface-hover transition-colors md:hidden"
-        >
-          <Menu className="w-5 h-5 text-text-secondary" />
-        </button>
+        {onMenuClick && (
+          <button onClick={onMenuClick} className="p-2 hover:bg-surface-hover rounded-xl transition-colors md:hidden">
+            <Menu className="w-4 h-4 text-text-muted" />
+          </button>
+        )}
         <div>
-          <motion.h1
-            key={title}
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-lg font-bold text-text-primary"
-          >
-            {title}
-          </motion.h1>
-          {subtitle && (
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-text-muted">
-              {subtitle}
-            </motion.p>
-          )}
+          <h1 className="text-base font-bold text-text-primary leading-none">{title}</h1>
+          {subtitle && <p className="text-xs text-text-muted mt-0.5">{subtitle}</p>}
         </div>
       </div>
 
       {/* Right: Actions */}
       <div className="flex items-center gap-2">
-        {/* AI Assistant Badge */}
+        {/* Timer Widget */}
+        {activeTimer ? (
+          <motion.button
+            onClick={() => router.push('/time-billing')}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-success/10 border border-success/20 hover:bg-success/20 transition-colors"
+          >
+            <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+            <span className="text-xs font-mono font-semibold text-success">{elapsedFormatted}</span>
+            <span className="text-[10px] text-success/80 hidden sm:block max-w-[100px] truncate">{activeTimer.description || activeTimer.clientName}</span>
+          </motion.button>
+        ) : (
+          <button
+            onClick={() => quickAction('timer')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-text-secondary hover:bg-surface-hover border border-border transition-colors"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span className="hidden sm:block">Timer</span>
+          </button>
+        )}
+
+        {/* AI Button */}
         <motion.button
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-accent-500/10 to-pink-500/10 border border-accent-400/20 text-sm font-medium text-accent-600 dark:text-accent-400 hover:from-accent-500/20 hover:to-pink-500/20 transition-all pulse-glow-accent"
+          onClick={openAI}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary-600 to-accent-600 text-white shadow-sm hover:shadow-md hover:opacity-90 transition-all"
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">AI Assist</span>
+          <span className="hidden sm:block">AI Assist</span>
         </motion.button>
-
         {/* Theme Toggle */}
-        <motion.button
+        <button
           onClick={toggleTheme}
-          className="w-9 h-9 rounded-xl bg-surface-hover flex items-center justify-center hover:bg-border transition-colors relative overflow-hidden"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          className="p-2 hover:bg-surface-hover rounded-xl transition-colors"
         >
-          <AnimatePresence mode="wait">
-            {theme === 'light' ? (
-              <motion.div key="sun" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
-                <Moon className="w-4 h-4 text-text-secondary" />
-              </motion.div>
-            ) : (
-              <motion.div key="moon" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
-                <Sun className="w-4 h-4 text-warning" />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.button>
+          {theme === 'dark' ? <Sun className="w-4 h-4 text-text-muted" /> : <Moon className="w-4 h-4 text-text-muted" />}
+        </button>
 
-        {/* Quick Add */}
+        {/* Quick Actions + Button */}
         <div className="relative">
           <motion.button
-            onClick={() => { setShowQuickActions(!showQuickActions); setShowNotifications(false); }}
-            className="w-9 h-9 rounded-xl bg-primary-600 text-white flex items-center justify-center hover:bg-primary-700 transition-colors shadow-sm pulse-glow"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowQuickActions(!showQuickActions)}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 transition-colors shadow-sm"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
+            <ChevronDown className="w-3 h-3" />
           </motion.button>
 
           <AnimatePresence>
             {showQuickActions && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                transition={{ duration: 0.15 }}
-                className="absolute right-0 top-full mt-2 w-56 bg-surface rounded-xl border border-border shadow-lg overflow-hidden"
-              >
-                <div className="p-2">
-                  <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider px-3 py-1.5">Quick Actions</p>
-                  {quickActions.map((action, i) => (
-                    <motion.button
-                      key={action.label}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface-hover transition-colors"
-                    >
-                      <action.icon className={`w-4 h-4 ${action.color}`} />
-                      <span className="text-sm font-medium text-text-primary">{action.label}</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </motion.div>
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowQuickActions(false)} />
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl border border-border shadow-xl overflow-hidden z-30"
+                >
+                  <div className="p-1.5">
+                    <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider px-2.5 py-1.5">Quick Actions</p>
+                    {quickActions.map(action => {
+                      const Icon = action.icon;
+                      return (
+                        <button
+                          key={action.id}
+                          onClick={() => quickAction(action.id)}
+                          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surface-hover transition-colors text-left"
+                        >
+                          <Icon className={clsx('w-4 h-4', action.color)} />
+                          <span className="text-sm font-medium text-text-primary">{action.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              </>
             )}
           </AnimatePresence>
         </div>
-
-        {/* Notifications */}
+        {/* Notifications Bell */}
         <div className="relative">
           <motion.button
-            onClick={() => { setShowNotifications(!showNotifications); setShowQuickActions(false); }}
-            className="relative w-9 h-9 rounded-xl bg-surface-hover flex items-center justify-center hover:bg-border transition-colors"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowNotifications(!showNotifications)}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="relative p-2 hover:bg-surface-hover rounded-xl transition-colors"
           >
-            <Bell className="w-4 h-4 text-text-secondary" />
+            <Bell className="w-4 h-4 text-text-muted" />
             {unreadCount > 0 && (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-danger text-[9px] font-bold text-white flex items-center justify-center"
-              >
-                {unreadCount}
-              </motion.span>
+              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-danger text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
             )}
           </motion.button>
 
           <AnimatePresence>
             {showNotifications && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                transition={{ duration: 0.15 }}
-                className="absolute right-0 top-full mt-2 w-80 bg-surface rounded-xl border border-border shadow-lg overflow-hidden"
-              >
-                <div className="p-3 border-b border-border flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-text-primary">Notifications</h3>
-                  <button className="text-xs text-primary-600 hover:text-primary-700 font-medium">Mark all read</button>
-                </div>
-                <div className="max-h-80 overflow-y-auto">
-                  {notifications.map((notif, i) => (
-                    <motion.div
-                      key={notif.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className={`px-3 py-3 border-b border-border-light hover:bg-surface-hover transition-colors cursor-pointer ${!notif.read ? 'bg-primary-50/30' : ''}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${!notif.read ? 'bg-primary-600' : 'bg-transparent'}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-text-primary">{notif.title}</p>
-                          <p className="text-xs text-text-muted mt-0.5">{notif.subtitle}</p>
-                          <p className="text-[10px] text-text-muted mt-1">{notif.time}</p>
-                        </div>
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowNotifications(false)} />
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl border border-border shadow-xl overflow-hidden z-30"
+                >
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-text-primary">Notifications</h3>
+                      {unreadCount > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-danger/10 text-danger text-[10px] font-bold">{unreadCount}</span>
+                      )}
+                    </div>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="flex items-center gap-1 text-[10px] font-medium text-primary-600 hover:text-primary-700 transition-colors">
+                        <Check className="w-3 h-3" />
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+                        <Bell className="w-8 h-8 text-text-muted/30 mb-2" />
+                        <p className="text-sm text-text-muted">No notifications</p>
                       </div>
-                    </motion.div>
-                  ))}
-                </div>
-                <div className="p-2 border-t border-border">
-                  <button className="w-full text-center text-xs text-primary-600 hover:text-primary-700 font-medium py-1.5">
-                    View all notifications
-                  </button>
-                </div>
-              </motion.div>
+                    ) : (
+                      <div className="p-1.5 space-y-0.5">
+                        {notifications.map(notif => (
+                          <button
+                            key={notif.id}
+                            onClick={() => { setShowNotifications(false); router.push(notif.href); }}
+                            className={clsx(
+                              'w-full text-left px-3 py-2.5 rounded-lg transition-colors',
+                              notif.read ? 'hover:bg-surface-hover' : 'bg-primary-50/50 hover:bg-primary-50'
+                            )}
+                          >
+                            <div className="flex items-start gap-2">
+                              {!notif.read && <div className="w-1.5 h-1.5 rounded-full bg-primary-500 flex-shrink-0 mt-1.5" />}
+                              <div className={clsx('flex-1 min-w-0', notif.read && 'pl-3.5')}>
+                                <p className="text-xs font-semibold text-text-primary truncate">{notif.title}</p>
+                                <p className="text-[11px] text-text-muted mt-0.5 truncate">{notif.subtitle}</p>
+                                <p className="text-[10px] text-text-muted/70 mt-0.5">{notif.time}</p>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="border-t border-border p-2">
+                    <button
+                      onClick={() => { setShowNotifications(false); router.push('/email'); }}
+                      className="w-full text-center text-xs font-medium text-primary-600 hover:text-primary-700 py-1.5 rounded-lg hover:bg-primary-50 transition-colors"
+                    >
+                      View all in Triage
+                    </button>
+                  </div>
+                </motion.div>
+              </>
             )}
           </AnimatePresence>
         </div>
-
-        {/* Current Timer */}
-        <motion.div
-          className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-success/10 border border-success/20 cursor-pointer"
-          whileHover={{ scale: 1.02 }}
-        >
-          <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          <span className="text-xs font-mono font-semibold text-success">02:34:15</span>
-        </motion.div>
       </div>
-    </header>
+    </div>
   );
 }
+

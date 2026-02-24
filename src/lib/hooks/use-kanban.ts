@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useSupabase, isSupabaseConfigured } from './use-supabase';
-import type { KanbanColumn, KanbanCard } from '@/lib/types/database';
+import { useState, useEffect, useCallback } from "react";
+import { useSupabase, isSupabaseConfigured } from "./use-supabase";
+import type { KanbanColumn, KanbanCard } from "@/lib/types/database";
 
 export interface ColumnWithCards extends KanbanColumn {
   items: KanbanCard[];
@@ -22,15 +22,15 @@ export function useKanban(boardId?: string) {
     }
 
     const colQuery = boardId
-      ? supabase.from('kanban_columns').select('*').eq('board_id', boardId).order('sort_order')
-      : supabase.from('kanban_columns').select('*').order('sort_order');
+      ? supabase.from("kanban_columns").select("*").eq("board_id", boardId).order("sort_order")
+      : supabase.from("kanban_columns").select("*").order("sort_order");
 
     const { data: cols } = await colQuery;
     if (!cols) { setLoading(false); return; }
 
     const colIds = cols.map(c => c.id);
     const { data: cards } = colIds.length
-      ? await supabase.from('kanban_cards').select('*').in('column_id', colIds).order('sort_order')
+      ? await supabase.from("kanban_cards").select("*").in("column_id", colIds).order("sort_order")
       : { data: [] };
 
     const columnsWithCards: ColumnWithCards[] = cols.map(col => ({
@@ -46,12 +46,12 @@ export function useKanban(boardId?: string) {
     fetchColumns();
     if (!configured) return;
     const channel = supabase
-      .channel('kanban-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_cards' }, fetchColumns)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_columns' }, fetchColumns)
+      .channel(`kanban-realtime-${boardId ?? "all"}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "kanban_cards" }, fetchColumns)
+      .on("postgres_changes", { event: "*", schema: "public", table: "kanban_columns" }, fetchColumns)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [fetchColumns, supabase, configured]);
+  }, [fetchColumns, supabase, configured, boardId]);
 
   async function moveCard(cardId: string, toColumnId: string, toIndex: number) {
     if (!configured) {
@@ -70,7 +70,7 @@ export function useKanban(boardId?: string) {
       });
       return;
     }
-    await supabase.from('kanban_cards').update({ column_id: toColumnId, sort_order: toIndex }).eq('id', cardId);
+    await supabase.from("kanban_cards").update({ column_id: toColumnId, sort_order: toIndex }).eq("id", cardId);
     await fetchColumns();
   }
 
@@ -78,10 +78,10 @@ export function useKanban(boardId?: string) {
     if (!configured) {
       const newCard: KanbanCard = {
         id: `card-${Date.now()}`, column_id: columnId,
-        title: input.title ?? 'New card', description: input.description ?? null,
+        title: input.title ?? "New card", description: input.description ?? null,
         client_id: null, client_name: input.client_name ?? null,
         assignee_id: null, assignee: input.assignee ?? null,
-        priority: input.priority ?? 'medium', due_date: input.due_date ?? null,
+        priority: input.priority ?? "medium", due_date: input.due_date ?? null,
         tags: input.tags ?? [], progress: 0, sort_order: 0,
         comments_count: 0, attachments_count: 0,
         subtasks_total: 0, subtasks_completed: 0,
@@ -93,11 +93,11 @@ export function useKanban(boardId?: string) {
       return newCard;
     }
     const { data, error } = await supabase
-      .from('kanban_cards')
+      .from("kanban_cards")
       .insert({
         column_id: columnId,
-        title: input.title ?? 'New card',
-        priority: input.priority ?? 'medium',
+        title: input.title ?? "New card",
+        priority: input.priority ?? "medium",
         due_date: input.due_date ?? null,
         client_name: input.client_name ?? null,
         assignee: input.assignee ?? null,
@@ -112,5 +112,77 @@ export function useKanban(boardId?: string) {
     return data;
   }
 
-  return { columns, loading, moveCard, addCard, refetch: fetchColumns };
+  async function editCard(cardId: string, updates: Partial<KanbanCard>) {
+    if (!configured) {
+      setColumns(prev => prev.map(col => ({
+        ...col,
+        items: col.items.map(c => c.id === cardId ? { ...c, ...updates } : c),
+      })));
+      return;
+    }
+    const { error } = await supabase.from("kanban_cards").update(updates).eq("id", cardId);
+    if (error) throw error;
+    await fetchColumns();
+  }
+
+  async function deleteCard(cardId: string) {
+    if (!configured) {
+      setColumns(prev => prev.map(col => ({
+        ...col,
+        items: col.items.filter(c => c.id !== cardId),
+      })));
+      return;
+    }
+    const { error } = await supabase.from("kanban_cards").delete().eq("id", cardId);
+    if (error) throw error;
+    await fetchColumns();
+  }
+
+  async function addColumn(title: string) {
+    if (!configured) {
+      const newCol: ColumnWithCards = {
+        id: `col-${Date.now()}`,
+        title,
+        color: "#64748b",
+        sort_order: columns.length,
+        board_id: boardId ?? null,
+        wip_limit: null,
+        created_at: new Date().toISOString(),
+        items: [],
+      };
+      setColumns(prev => [...prev, newCol]);
+      return;
+    }
+    const maxOrder = columns.reduce((m, c) => Math.max(m, c.sort_order ?? 0), 0);
+    const { error } = await supabase.from("kanban_columns").insert({
+      title,
+      color: "#64748b",
+      sort_order: maxOrder + 1,
+      board_id: boardId ?? null,
+    });
+    if (error) throw error;
+    await fetchColumns();
+  }
+
+  async function editColumn(columnId: string, updates: Partial<KanbanColumn>) {
+    if (!configured) {
+      setColumns(prev => prev.map(col => col.id === columnId ? { ...col, ...updates } : col));
+      return;
+    }
+    const { error } = await supabase.from("kanban_columns").update(updates).eq("id", columnId);
+    if (error) throw error;
+    await fetchColumns();
+  }
+
+  async function deleteColumn(columnId: string) {
+    if (!configured) {
+      setColumns(prev => prev.filter(col => col.id !== columnId));
+      return;
+    }
+    const { error } = await supabase.from("kanban_columns").delete().eq("id", columnId);
+    if (error) throw error;
+    await fetchColumns();
+  }
+
+  return { columns, loading, moveCard, addCard, editCard, deleteCard, addColumn, editColumn, deleteColumn, refetch: fetchColumns };
 }

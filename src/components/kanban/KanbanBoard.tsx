@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,7 +14,7 @@ import clsx from 'clsx';
 import { useKanban, type ColumnWithCards } from '@/lib/hooks/use-kanban';
 import type { KanbanCard } from '@/lib/types/database';
 
-/* ─── Add Card Modal ────────────────────────────────────────────────── */
+/* â”€â”€â”€ Add Card Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function AddCardModal({
   columns, defaultColumnId, onClose, onSave,
 }: {
@@ -122,6 +122,172 @@ function AddCardModal({
   );
 }
 
+
+/* --- Edit Card Modal --- */
+function EditCardModal({ card, columns, onClose, onSave }: { card: KanbanCard; columns: ColumnWithCards[]; onClose: () => void; onSave: (cardId: string, updates: Partial<KanbanCard>) => Promise<void> }) {
+  const [title, setTitle] = useState(card.title);
+  const [columnId, setColumnId] = useState(card.column_id);
+  const [clientName, setClientName] = useState(card.client_name ?? '');
+  const [priority, setPriority] = useState<KanbanCard['priority']>(card.priority);
+  const [dueDate, setDueDate] = useState(card.due_date ?? '');
+  const [assignee, setAssignee] = useState(card.assignee ?? '');
+  const [tags, setTags] = useState(card.tags.join(', '));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSave() {
+    if (!title.trim()) { setError('Title is required.'); return; }
+    setSaving(true); setError('');
+    try {
+      const tagList = tags.split(',').map(t => t.trim()).filter(Boolean);
+      await onSave(card.id, { title: title.trim(), column_id: columnId, client_name: clientName.trim() || null, priority, due_date: dueDate || null, assignee: assignee.trim() || null, tags: tagList });
+      onClose();
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed to update card'); }
+    finally { setSaving(false); }
+  }
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+              <Plus className="w-4 h-4 text-white" />
+            </div>
+            <h2 className="text-sm font-bold text-text-primary">Edit Card</h2>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors"><X className="w-4 h-4 text-text-muted" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {error && <div className="flex items-center gap-2 px-3 py-2.5 bg-danger/5 border border-danger/20 rounded-xl text-xs text-danger"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{error}</div>}
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Card Title *</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} autoFocus
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Column</label>
+            <select value={columnId} onChange={e => setColumnId(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+              {columns.map(col => <option key={col.id} value={col.id}>{col.title}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Priority</label>
+              <select value={priority} onChange={e => setPriority(e.target.value as KanbanCard['priority'])}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Due Date</label>
+              <div className="relative"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                  className="w-full h-10 pl-8 pr-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" /></div>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client Name</label>
+            <input type="text" value={clientName} onChange={e => setClientName(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assignee</label>
+            <input type="text" value={assignee} onChange={e => setAssignee(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Tags (comma-separated)</label>
+            <input type="text" value={tags} onChange={e => setTags(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
+            <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex-1 h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-70">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+/* --- Delete Card Modal --- */
+function DeleteCardModal({ card, onClose, onDelete }: { card: KanbanCard; onClose: () => void; onDelete: (id: string) => Promise<void> }) {
+  const [deleting, setDeleting] = useState(false);
+  async function handleDelete() {
+    setDeleting(true);
+    try { await onDelete(card.id); onClose(); } catch { setDeleting(false); }
+  }
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-6 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-danger/10 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </div>
+          <h2 className="text-base font-bold text-text-primary mb-1">Delete Card?</h2>
+          <p className="text-sm text-text-muted mb-6">This will permanently delete <strong>{card.title}</strong>.</p>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
+            <motion.button onClick={handleDelete} disabled={deleting} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex-1 h-10 rounded-xl bg-danger hover:bg-red-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-70">
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete Card'}
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+/* --- Add Column Modal --- */
+function AddColumnModal({ onClose, onSave }: { onClose: () => void; onSave: (title: string) => Promise<void> }) {
+  const [title, setTitle] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!title.trim()) return;
+    setSaving(true);
+    try { await onSave(title.trim()); onClose(); } catch { setSaving(false); }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border">
+          <h2 className="text-sm font-bold text-text-primary">Add Column</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors"><X className="w-4 h-4 text-text-muted" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Column Title</label>
+            <input type="text" placeholder="e.g. In Review" value={title} onChange={e => setTitle(e.target.value)} autoFocus
+              onKeyDown={e => e.key === 'Enter' && handleSave()}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
+            <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex-1 h-10 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-70">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Plus className="w-3.5 h-3.5" />Add Column</>}
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 const priorityColors = {
   low: { bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' },
   medium: { bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' },
@@ -138,8 +304,9 @@ const tagColors = [
   'bg-cyan-50 text-cyan-700 border-cyan-200',
 ];
 
-function KanbanCardComponent({ card, index }: { card: KanbanCard; index: number }) {
+function KanbanCardComponent({ card, index, onEdit, onDelete }: { card: KanbanCard; index: number; onEdit: () => void; onDelete: () => void }) {
   const priority = priorityColors[card.priority];
+  const [showMenu, setShowMenu] = useState(false);
 
   return (
     <Draggable draggableId={card.id} index={index}>
@@ -170,9 +337,26 @@ function KanbanCardComponent({ card, index }: { card: KanbanCard; index: number 
                   </div>
                 )}
               </div>
-              <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-surface-hover rounded">
-                <MoreHorizontal className="w-3.5 h-3.5 text-text-muted" />
-              </button>
+              <div className="relative">
+                <button onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }} className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-surface-hover rounded">
+                  <MoreHorizontal className="w-3.5 h-3.5 text-text-muted" />
+                </button>
+                {showMenu && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)} />
+                    <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl border border-border shadow-xl overflow-hidden z-30">
+                      <button onClick={() => { setShowMenu(false); onEdit(); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-surface-hover transition-colors">
+                        <svg className="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        Edit
+                      </button>
+                      <button onClick={() => { setShowMenu(false); onDelete(); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-danger hover:bg-danger/5 transition-colors">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Title */}
@@ -257,10 +441,17 @@ function KanbanCardComponent({ card, index }: { card: KanbanCard; index: number 
 }
 
 export default function KanbanBoard({ boardId }: { boardId?: string }) {
-  const { columns, loading, moveCard, addCard } = useKanban(boardId);
+  const { columns, loading, moveCard, addCard, editCard, deleteCard, addColumn, editColumn, deleteColumn } = useKanban(boardId);
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
   const [addCardColumn, setAddCardColumn] = useState<string | undefined>(undefined);
   const [showAddCard, setShowAddCard] = useState(false);
+  const [editCardTarget, setEditCardTarget] = useState<KanbanCard | null>(null);
+  const [deleteCardTarget, setDeleteCardTarget] = useState<KanbanCard | null>(null);
+  const [showAddColumn, setShowAddColumn] = useState(false);
+  const [columnMenuId, setColumnMenuId] = useState<string | null>(null);
+  const [renamingColumnId, setRenamingColumnId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   function openAddCard(columnId?: string) {
     setAddCardColumn(columnId);
@@ -295,6 +486,15 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
             onClose={() => setShowAddCard(false)}
             onSave={addCard}
           />
+        )}
+        {editCardTarget && (
+          <EditCardModal card={editCardTarget} columns={columns} onClose={() => setEditCardTarget(null)} onSave={editCard} />
+        )}
+        {deleteCardTarget && (
+          <DeleteCardModal card={deleteCardTarget} onClose={() => setDeleteCardTarget(null)} onDelete={deleteCard} />
+        )}
+        {showAddColumn && (
+          <AddColumnModal onClose={() => setShowAddColumn(false)} onSave={addColumn} />
         )}
       </AnimatePresence>
       {/* Toolbar */}
@@ -336,6 +536,8 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
             <input
               type="text"
               placeholder="Search cards..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
               className="h-8 pl-8 pr-3 text-xs bg-surface-hover rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-primary-500/20 w-48 placeholder:text-text-muted"
             />
           </div>
@@ -366,7 +568,18 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
               <div className="flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: column.color }} />
-                  <h3 className="text-sm font-semibold text-text-primary">{column.title}</h3>
+                  {renamingColumnId === column.id ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={e => setRenameValue(e.target.value)}
+                      onBlur={() => { if (renameValue.trim()) editColumn(column.id, { title: renameValue.trim() }); setRenamingColumnId(null); }}
+                      onKeyDown={e => { if (e.key === 'Enter') { if (renameValue.trim()) editColumn(column.id, { title: renameValue.trim() }); setRenamingColumnId(null); } if (e.key === 'Escape') setRenamingColumnId(null); }}
+                      className="text-sm font-semibold text-text-primary bg-white rounded px-1 border border-primary-400 focus:outline-none w-full"
+                    />
+                  ) : (
+                    <h3 className="text-sm font-semibold text-text-primary">{column.title}</h3>
+                  )}
                   <span className="text-xs text-text-muted bg-surface-hover px-2 py-0.5 rounded-full font-medium">
                     {column.items.length}
                   </span>
@@ -375,9 +588,26 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
                   <button onClick={() => openAddCard(column.id)} className="p-1 hover:bg-surface-hover rounded transition-colors">
                     <Plus className="w-3.5 h-3.5 text-text-muted" />
                   </button>
-                  <button className="p-1 hover:bg-surface-hover rounded transition-colors">
-                    <MoreHorizontal className="w-3.5 h-3.5 text-text-muted" />
-                  </button>
+                  <div className="relative">
+                    <button onClick={e => { e.stopPropagation(); setColumnMenuId(columnMenuId === column.id ? null : column.id); }} className="p-1 hover:bg-surface-hover rounded transition-colors">
+                      <MoreHorizontal className="w-3.5 h-3.5 text-text-muted" />
+                    </button>
+                    {columnMenuId === column.id && (
+                      <>
+                        <div className="fixed inset-0 z-20" onClick={() => setColumnMenuId(null)} />
+                        <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl border border-border shadow-xl overflow-hidden z-30">
+                          <button onClick={() => { setColumnMenuId(null); setRenamingColumnId(column.id); setRenameValue(column.title); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-surface-hover transition-colors">
+                            <svg className="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            Rename
+                          </button>
+                          <button onClick={() => { setColumnMenuId(null); if (confirm("Delete this column and all its cards?")) deleteColumn(column.id); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-danger hover:bg-danger/5 transition-colors">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -392,8 +622,11 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
                       snapshot.isDraggingOver ? 'bg-primary-50/50 border-2 border-dashed border-primary-200' : 'bg-background/50'
                     )}
                   >
-                    {column.items.map((card, index) => (
-                      <KanbanCardComponent key={card.id} card={card} index={index} />
+                    {(searchQuery
+                        ? column.items.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()) || (c.client_name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) || (c.assignee ?? '').toLowerCase().includes(searchQuery.toLowerCase()))
+                        : column.items
+                      ).map((card, index) => (
+                      <KanbanCardComponent key={card.id} card={card} index={index} onEdit={() => setEditCardTarget(card)} onDelete={() => setDeleteCardTarget(card)} />
                     ))}
                     {provided.placeholder}
 
@@ -413,6 +646,7 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
 
           {/* Add Column */}
           <motion.button
+            onClick={() => setShowAddColumn(true)}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
@@ -427,3 +661,4 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
     </div>
   );
 }
+

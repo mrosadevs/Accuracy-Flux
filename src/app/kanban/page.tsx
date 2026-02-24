@@ -104,8 +104,9 @@ export default function KanbanPage() {
           </div>
         </div>
 
-        <KanbanBoard />
+        <KanbanBoard boardId={selectedBoard.id} />
       </div>
     </AppShell>
   );
 }
+

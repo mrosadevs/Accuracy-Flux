@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useSupabase, isSupabaseConfigured } from './use-supabase';
-import type { WorkItem, Task } from '@/lib/types/database';
+import { useState, useEffect, useCallback } from "react";
+import { useSupabase, isSupabaseConfigured } from "./use-supabase";
+import type { WorkItem, Task } from "@/lib/types/database";
 
 export interface WorkItemWithTasks extends WorkItem {
   tasks: Task[];
@@ -22,15 +22,15 @@ export function useWorkItems() {
     }
 
     const { data: items } = await supabase
-      .from('work_items')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .from("work_items")
+      .select("*")
+      .order("created_at", { ascending: false });
 
     if (!items) { setLoading(false); return; }
 
     const ids = items.map(i => i.id);
     const { data: tasks } = ids.length
-      ? await supabase.from('tasks').select('*').in('work_item_id', ids).order('sort_order')
+      ? await supabase.from("tasks").select("*").in("work_item_id", ids).order("sort_order")
       : { data: [] };
 
     const withTasks: WorkItemWithTasks[] = items.map(item => ({
@@ -48,13 +48,13 @@ export function useWorkItems() {
 
   async function updateTaskCompletion(taskId: string, workItemId: string, completed: boolean) {
     if (!configured) return;
-    await supabase.from('tasks').update({ completed }).eq('id', taskId);
+    await supabase.from("tasks").update({ completed }).eq("id", taskId);
     const workItem = workItems.find(w => w.id === workItemId);
     if (workItem) {
       const allTasks = workItem.tasks.map(t => t.id === taskId ? { ...t, completed } : t);
       const done = allTasks.filter(t => t.completed).length;
       const progress = allTasks.length > 0 ? Math.round((done / allTasks.length) * 100) : 0;
-      await supabase.from('work_items').update({ progress }).eq('id', workItemId);
+      await supabase.from("work_items").update({ progress }).eq("id", workItemId);
     }
     await fetchWorkItems();
   }
@@ -62,15 +62,15 @@ export function useWorkItems() {
   async function addWorkItem(input: Partial<WorkItem>) {
     if (!configured) return null;
     const { data, error } = await supabase
-      .from('work_items')
+      .from("work_items")
       .insert({
-        title: input.title ?? '',
+        title: input.title ?? "",
         client_id: input.client_id ?? null,
-        client_name: input.client_name ?? '',
-        type: input.type ?? 'tax-return',
-        status: input.status ?? 'not-started',
-        priority: input.priority ?? 'medium',
-        assignee: input.assignee ?? '',
+        client_name: input.client_name ?? "",
+        type: input.type ?? "tax-return",
+        status: input.status ?? "not-started",
+        priority: input.priority ?? "medium",
+        assignee: input.assignee ?? "",
         due_date: input.due_date ?? null,
         start_date: input.start_date ?? null,
         progress: 0,
@@ -83,5 +83,19 @@ export function useWorkItems() {
     return data;
   }
 
-  return { workItems, loading, updateTaskCompletion, addWorkItem, refetch: fetchWorkItems };
+  async function updateWorkItem(id: string, updates: Partial<WorkItem>) {
+    if (!configured) return;
+    const { error } = await supabase.from("work_items").update(updates).eq("id", id);
+    if (error) throw error;
+    await fetchWorkItems();
+  }
+
+  async function deleteWorkItem(id: string) {
+    if (!configured) return;
+    const { error } = await supabase.from("work_items").delete().eq("id", id);
+    if (error) throw error;
+    await fetchWorkItems();
+  }
+
+  return { workItems, loading, updateTaskCompletion, addWorkItem, updateWorkItem, deleteWorkItem, refetch: fetchWorkItems };
 }
