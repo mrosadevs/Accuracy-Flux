@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import AnimatedBackground from '@/components/ui/AnimatedBackground';
 import AIAssistant from '@/components/ui/AIAssistant';
+import { useProfile } from '@/lib/hooks/use-profile';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -15,6 +17,18 @@ interface AppShellProps {
 export default function AppShell({ children, title, subtitle }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { profile, loading: profileLoading } = useProfile();
+  const router = useRouter();
+
+  // Redirect clients away from the staff portal to their own portal
+  useEffect(() => {
+    if (!profileLoading && profile?.role === 'client') {
+      router.replace('/portal');
+    }
+  }, [profile, profileLoading, router]);
+
+  // Don't render staff UI for client accounts (prevents flash of content)
+  if (!profileLoading && profile?.role === 'client') return null;
 
   return (
     <div className="min-h-screen gradient-mesh bg-background">

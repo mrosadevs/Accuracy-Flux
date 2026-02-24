@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, FileText, Download, CheckCircle2,
@@ -11,6 +11,7 @@ import {
 import clsx from 'clsx';
 import { usePortal, usePortalClient } from '@/lib/hooks/use-portal';
 import { useSupabase } from '@/lib/hooks/use-supabase';
+import { useRouter } from 'next/navigation';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   'not-started':      { label: 'Pending',     color: 'text-warning',      bg: 'bg-warning/10'   },
@@ -26,7 +27,15 @@ function getInitials(name: string) {
 
 export default function PortalPage() {
   const supabase = useSupabase();
-  const { client, workItems, authLoading } = usePortalClient();
+  const router = useRouter();
+  const { client, workItems, authLoading, userRole } = usePortalClient();
+
+  // Redirect staff away from the client portal
+  useEffect(() => {
+    if (!authLoading && !client && userRole && userRole !== 'client') {
+      router.replace('/dashboard');
+    }
+  }, [authLoading, client, userRole, router]);
   const { documents, messages, loading, uploadDocument, getDownloadUrl, sendMessage } = usePortal(client?.id);
 
   const [isDragging, setIsDragging]           = useState(false);

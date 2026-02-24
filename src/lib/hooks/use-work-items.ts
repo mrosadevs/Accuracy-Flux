@@ -42,9 +42,23 @@ export function useWorkItems() {
     setLoading(false);
   }, [supabase, configured]);
 
+  // Safety: never show spinner forever
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 10000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Initial fetch + real-time subscription
   useEffect(() => {
     fetchWorkItems();
-  }, [fetchWorkItems]);
+    if (!configured) return;
+    const channel = supabase
+      .channel("work-items-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "work_items" }, fetchWorkItems)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, fetchWorkItems)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchWorkItems, supabase, configured]);
 
   async function updateTaskCompletion(taskId: string, workItemId: string, completed: boolean) {
     if (!configured) return;

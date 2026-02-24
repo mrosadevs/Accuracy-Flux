@@ -62,7 +62,10 @@ function LoginPageInner() {
           setMfaFactorId(totpFactor.id);
           setStep('2fa');
         } else {
-          router.push(loginType === 'client' ? '/portal' : '/dashboard');
+          // Always redirect based on actual DB role, not which tab was clicked
+          const { data: profileData } = await supabase
+            .from('profiles').select('role').eq('id', data.session.user.id).single();
+          router.push(profileData?.role === 'client' ? '/portal' : '/dashboard');
         }
       }
     } catch (err: unknown) {
@@ -98,7 +101,11 @@ function LoginPageInner() {
       });
 
       if (verifyError) throw verifyError;
-      router.push(loginType === 'client' ? '/portal' : '/dashboard');
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: profileData } = user
+        ? await supabase.from('profiles').select('role').eq('id', user.id).single()
+        : { data: null };
+      router.push(profileData?.role === 'client' ? '/portal' : '/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid code. Please try again.');
     } finally {

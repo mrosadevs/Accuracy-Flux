@@ -40,7 +40,6 @@ export function useTimeEntries() {
   const { profile } = useProfile();
   const configured = isSupabaseConfigured();
 
-  // Initialize activeTimer from localStorage so it survives page navigation
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -52,7 +51,7 @@ export function useTimeEntries() {
   const [loading, setLoading] = useState(true);
   const [elapsed, setElapsed] = useState(0);
 
-  // Timer tick every second
+  // ── Timer tick ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!activeTimer) { setElapsed(0); return; }
     const tick = () => setElapsed(Math.floor((Date.now() - activeTimer.startedAt) / 1000));
@@ -61,6 +60,13 @@ export function useTimeEntries() {
     return () => clearInterval(interval);
   }, [activeTimer]);
 
+  // ── Safety: never show spinner forever ──────────────────────────────────
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 10000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // ── Fetch entries ────────────────────────────────────────────────────────
   const fetchEntries = useCallback(async () => {
     if (!configured) { setLoading(false); return; }
     const { data } = await supabase
@@ -72,7 +78,6 @@ export function useTimeEntries() {
     if (data) {
       setEntries(
         data
-          // Filter out blank/orphan rows (no description, whitespace-only, or 0 hours)
           .filter((e: Record<string, unknown>) => {
             const desc = (e.description as string | null)?.trim();
             return !!(desc && (e.hours as number) > 0);
@@ -87,10 +92,18 @@ export function useTimeEntries() {
     setLoading(false);
   }, [supabase, configured]);
 
+  // ── Initial fetch + real-time subscription ───────────────────────────────
   useEffect(() => {
     fetchEntries();
-  }, [fetchEntries]);
+    if (!configured) return;
+    const channel = supabase
+      .channel("time-entries-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "time_entries" }, fetchEntries)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchEntries, supabase, configured]);
 
+  // ── Timer controls ───────────────────────────────────────────────────────
   function startTimer(timer: Omit<ActiveTimer, "startedAt">) {
     const fullTimer: ActiveTimer = { ...timer, startedAt: Date.now() };
     setActiveTimer(fullTimer);
@@ -102,7 +115,6 @@ export function useTimeEntries() {
 
   async function stopTimer() {
     const current = activeTimer;
-    // Clear state immediately
     setActiveTimer(null);
     setElapsed(0);
     try {
@@ -113,7 +125,8 @@ export function useTimeEntries() {
     if (!current || !profile || !configured) return;
     const finalElapsed = Math.floor((Date.now() - current.startedAt) / 1000);
     const hours = Math.round((finalElapsed / 3600) * 100) / 100;
-    if (hours < 0.01) return;
+    if (hours <= 0) return;
+
     await supabase.from("time_entries").insert({
       work_item_id: current.workItemId,
       client_id: current.clientId,
@@ -124,6 +137,17 @@ export function useTimeEntries() {
       billable: current.billable,
       rate: current.rate,
     });
+
+    // Sync time_spent on linked work item
+    if (current.workItemId) {
+      const { data: wi } = await supabase
+        .from("work_items").select("time_spent").eq("id", current.workItemId).single();
+      await supabase
+        .from("work_items")
+        .update({ time_spent: (wi?.time_spent ?? 0) + hours })
+        .eq("id", current.workItemId);
+    }
+
     await fetchEntries();
   }
 
@@ -131,6 +155,7 @@ export function useTimeEntries() {
     description: string;
     clientId: string | null;
     clientName: string;
+    workItemId?: string | null;
     hours: number;
     date: string;
     billable: boolean;
@@ -140,6 +165,7 @@ export function useTimeEntries() {
     const { data, error } = await supabase
       .from("time_entries")
       .insert({
+        work_item_id: input.workItemId ?? null,
         client_id: input.clientId,
         user_id: profile.id,
         description: input.description,
@@ -150,33 +176,53 @@ export function useTimeEntries() {
       })
       .select().single();
     if (error) throw error;
+
+    // Sync time_spent on linked work item
+    if (input.workItemId) {
+      const { data: wi } = await supabase
+        .from("work_items").select("time_spent").eq("id", input.workItemId).single();
+      await supabase
+        .from("work_items")
+        .update({ time_spent: (wi?.time_spent ?? 0) + input.hours })
+        .eq("id", input.workItemId);
+    }
+
     await fetchEntries();
     return data;
   }
 
   async function deleteEntry(id: string) {
     if (!configured) return;
+    // Decrement time_spent on linked work item before deleting
+    const entry = entries.find(e => e.id === id);
+    if (entry?.work_item_id) {
+      const { data: wi } = await supabase
+        .from("work_items").select("time_spent").eq("id", entry.work_item_id).single();
+      await supabase
+        .from("work_items")
+        .update({ time_spent: Math.max(0, (wi?.time_spent ?? 0) - entry.hours) })
+        .eq("id", entry.work_item_id);
+    }
     await supabase.from("time_entries").delete().eq("id", id);
     await fetchEntries();
   }
 
-  // Compute stats
+  // ── Stats ────────────────────────────────────────────────────────────────
   const now = new Date();
   const weekStart = new Date(now);
   weekStart.setDate(weekStart.getDate() - weekStart.getDay());
   const weekStartStr = weekStart.toISOString().split("T")[0];
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+  const monthStart   = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
 
-  const weekEntries = entries.filter(e => e.date >= weekStartStr);
+  const weekEntries  = entries.filter(e => e.date >= weekStartStr);
   const monthEntries = entries.filter(e => e.date >= monthStart);
-  const hoursThisWeek = weekEntries.reduce((s, e) => s + e.hours, 0);
-  const billableAmountWeek = weekEntries.filter(e => e.billable).reduce((s, e) => s + e.hours * e.rate, 0);
-  const hoursThisMonth = monthEntries.reduce((s, e) => s + e.hours, 0);
+  const hoursThisWeek       = weekEntries.reduce((s, e) => s + e.hours, 0);
+  const billableAmountWeek  = weekEntries.filter(e => e.billable).reduce((s, e) => s + e.hours * e.rate, 0);
+  const hoursThisMonth      = monthEntries.reduce((s, e) => s + e.hours, 0);
   const billableAmountMonth = monthEntries.filter(e => e.billable).reduce((s, e) => s + e.hours * e.rate, 0);
 
-  // Format elapsed to HH:MM:SS
   const elapsedFormatted = [
-    Math.floor(elapsed / 3600).toString().padStart(2, "00"),
+    Math.floor(elapsed / 3600).toString().padStart(2, "0"),
     Math.floor((elapsed % 3600) / 60).toString().padStart(2, "00"),
     (elapsed % 60).toString().padStart(2, "00"),
   ].join(":");
