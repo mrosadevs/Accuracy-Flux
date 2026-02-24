@@ -74,8 +74,22 @@ function AuthCallbackInner() {
         }
 
         // ── 3. Hash-fragment flow (invite emails from admin API) ───────────────
-        // The Supabase browser client auto-parses #access_token=... from the URL
-        // and stores the session.  We just need to read it back.
+        // Explicitly set session from hash tokens — more reliable than waiting
+        // for the Supabase client to auto-parse the hash asynchronously.
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        if (accessToken && refreshToken) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (!sessionError) {
+            router.replace(`/set-password?next=${encodeURIComponent(next)}`);
+            return;
+          }
+        }
+
+        // Fallback: check if Supabase already parsed the hash on its own
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           router.replace(`/set-password?next=${encodeURIComponent(next)}`);
