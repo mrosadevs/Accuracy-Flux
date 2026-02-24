@@ -2,43 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSupabase, isSupabaseConfigured } from './use-supabase';
-import { kanbanColumns as mockColumns } from '@/lib/mock-data';
 import type { KanbanColumn, KanbanCard } from '@/lib/types/database';
 
 export interface ColumnWithCards extends KanbanColumn {
   items: KanbanCard[];
-}
-
-// Convert mock data to DB shape
-function adaptMockColumns(): ColumnWithCards[] {
-  return mockColumns.map(col => ({
-    id: col.id,
-    board_id: 'default',
-    title: col.title,
-    color: col.color,
-    sort_order: 0,
-    created_at: new Date().toISOString(),
-    items: col.items.map(card => ({
-      id: card.id,
-      column_id: col.id,
-      title: card.title,
-      description: card.description ?? null,
-      client_id: null,
-      client_name: card.client ?? null,
-      assignee_id: null,
-      assignee: card.assignee ?? null,
-      priority: card.priority,
-      due_date: card.dueDate ?? null,
-      tags: card.tags,
-      progress: card.progress ?? 0,
-      sort_order: 0,
-      comments_count: card.comments ?? 0,
-      attachments_count: card.attachments ?? 0,
-      subtasks_total: card.subtasks?.total ?? 0,
-      subtasks_completed: card.subtasks?.completed ?? 0,
-      created_at: new Date().toISOString(),
-    })),
-  }));
 }
 
 export function useKanban(boardId?: string) {
@@ -49,7 +16,7 @@ export function useKanban(boardId?: string) {
 
   const fetchColumns = useCallback(async () => {
     if (!configured) {
-      setColumns(adaptMockColumns());
+      setColumns([]);
       setLoading(false);
       return;
     }
@@ -62,11 +29,9 @@ export function useKanban(boardId?: string) {
     if (!cols) { setLoading(false); return; }
 
     const colIds = cols.map(c => c.id);
-    const { data: cards } = await supabase
-      .from('kanban_cards')
-      .select('*')
-      .in('column_id', colIds)
-      .order('sort_order');
+    const { data: cards } = colIds.length
+      ? await supabase.from('kanban_cards').select('*').in('column_id', colIds).order('sort_order')
+      : { data: [] };
 
     const columnsWithCards: ColumnWithCards[] = cols.map(col => ({
       ...col,
@@ -79,73 +44,47 @@ export function useKanban(boardId?: string) {
 
   useEffect(() => {
     fetchColumns();
-
     if (!configured) return;
-
     const channel = supabase
       .channel('kanban-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_cards' }, fetchColumns)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_columns' }, fetchColumns)
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [fetchColumns, supabase, configured]);
 
   async function moveCard(cardId: string, toColumnId: string, toIndex: number) {
     if (!configured) {
-      // Update local state for mock
       setColumns(prev => {
         const next = prev.map(col => ({ ...col, items: [...col.items] }));
         let movedCard: KanbanCard | undefined;
-
         for (const col of next) {
           const idx = col.items.findIndex(c => c.id === cardId);
-          if (idx !== -1) {
-            [movedCard] = col.items.splice(idx, 1);
-            break;
-          }
+          if (idx !== -1) { [movedCard] = col.items.splice(idx, 1); break; }
         }
-
         if (movedCard) {
           const targetCol = next.find(c => c.id === toColumnId);
-          if (targetCol) {
-            movedCard.column_id = toColumnId;
-            targetCol.items.splice(toIndex, 0, movedCard);
-          }
+          if (targetCol) { movedCard.column_id = toColumnId; targetCol.items.splice(toIndex, 0, movedCard); }
         }
-
         return next;
       });
       return;
     }
-
-    await supabase
-      .from('kanban_cards')
-      .update({ column_id: toColumnId, sort_order: toIndex })
-      .eq('id', cardId);
+    await supabase.from('kanban_cards').update({ column_id: toColumnId, sort_order: toIndex }).eq('id', cardId);
     await fetchColumns();
   }
 
   async function addCard(columnId: string, input: Partial<KanbanCard>) {
     if (!configured) {
       const newCard: KanbanCard = {
-        id: `card-${Date.now()}`,
-        column_id: columnId,
-        title: input.title ?? 'New card',
-        description: input.description ?? null,
-        client_id: null,
-        client_name: input.client_name ?? null,
-        assignee_id: null,
-        assignee: input.assignee ?? null,
-        priority: input.priority ?? 'medium',
-        due_date: input.due_date ?? null,
-        tags: input.tags ?? [],
-        progress: 0,
-        sort_order: 0,
-        comments_count: 0,
-        attachments_count: 0,
-        subtasks_total: 0,
-        subtasks_completed: 0,
+        id: `card-${Date.now()}`, column_id: columnId,
+        title: input.title ?? 'New card', description: input.description ?? null,
+        client_id: null, client_name: input.client_name ?? null,
+        assignee_id: null, assignee: input.assignee ?? null,
+        priority: input.priority ?? 'medium', due_date: input.due_date ?? null,
+        tags: input.tags ?? [], progress: 0, sort_order: 0,
+        comments_count: 0, attachments_count: 0,
+        subtasks_total: 0, subtasks_completed: 0,
         created_at: new Date().toISOString(),
       };
       setColumns(prev => prev.map(col =>
@@ -153,10 +92,20 @@ export function useKanban(boardId?: string) {
       ));
       return newCard;
     }
-
     const { data, error } = await supabase
       .from('kanban_cards')
-      .insert({ column_id: columnId, title: input.title ?? 'New card', priority: input.priority ?? 'medium', tags: [], progress: 0, sort_order: 0, comments_count: 0, attachments_count: 0, subtasks_total: 0, subtasks_completed: 0 })
+      .insert({
+        column_id: columnId,
+        title: input.title ?? 'New card',
+        priority: input.priority ?? 'medium',
+        due_date: input.due_date ?? null,
+        client_name: input.client_name ?? null,
+        assignee: input.assignee ?? null,
+        tags: input.tags ?? [],
+        progress: 0, sort_order: 0,
+        comments_count: 0, attachments_count: 0,
+        subtasks_total: 0, subtasks_completed: 0,
+      })
       .select().single();
     if (error) throw error;
     await fetchColumns();

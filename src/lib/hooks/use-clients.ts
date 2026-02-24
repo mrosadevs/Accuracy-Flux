@@ -2,29 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSupabase, isSupabaseConfigured } from './use-supabase';
-import { clients as mockClients } from '@/lib/mock-data';
 import type { Client } from '@/lib/types/database';
-
-// Adapter: convert mock data shape to DB shape
-function adaptMockClient(m: (typeof mockClients)[0]): Client {
-  return {
-    id: m.id,
-    name: m.name,
-    company: m.company,
-    email: m.email,
-    phone: m.phone,
-    status: m.status,
-    type: m.type,
-    assigned_to_id: null,
-    assigned_to: m.assignedTo,
-    tags: m.tags,
-    total_billed: m.totalBilled,
-    outstanding_balance: m.outstandingBalance,
-    last_activity: m.lastActivity,
-    portal_user_id: null,
-    created_at: new Date().toISOString(),
-  };
-}
 
 export function useClients() {
   const supabase = useSupabase();
@@ -34,7 +12,7 @@ export function useClients() {
 
   const fetchClients = useCallback(async () => {
     if (!configured) {
-      setClients(mockClients.map(adaptMockClient));
+      setClients([]);
       setLoading(false);
       return;
     }
@@ -45,14 +23,11 @@ export function useClients() {
 
   useEffect(() => {
     fetchClients();
-
     if (!configured) return;
-
     const channel = supabase
       .channel('clients-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, fetchClients)
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [fetchClients, supabase, configured]);
 

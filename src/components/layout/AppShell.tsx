@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import AnimatedBackground from '@/components/ui/AnimatedBackground';
+import AIAssistant from '@/components/ui/AIAssistant';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -30,6 +31,7 @@ export default function AppShell({ children, title, subtitle }: AppShellProps) {
           {children}
         </main>
       </div>
+      <AIAssistant />
     </div>
   );
 }

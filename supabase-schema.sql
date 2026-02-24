@@ -428,6 +428,71 @@ begin
 end $$;
 
 -- ─────────────────────────────────────────────
+-- 14B. INTERNAL MESSAGING (Triage — staff only)
+-- ─────────────────────────────────────────────
+
+-- Threads: each thread is a named conversation topic
+create table if not exists public.internal_threads (
+  id                   uuid primary key default gen_random_uuid(),
+  created_at           timestamptz default now(),
+  created_by           uuid references public.profiles(id) on delete set null,
+  creator_name         text,
+  title                text not null,
+  last_message_at      timestamptz default now(),
+  last_message_preview text
+);
+
+alter table public.internal_threads enable row level security;
+
+create policy "Staff can view threads"
+  on public.internal_threads for select
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and role in ('owner', 'admin', 'staff'))
+  );
+
+create policy "Staff can create threads"
+  on public.internal_threads for insert
+  with check (
+    exists (select 1 from public.profiles where id = auth.uid() and role in ('owner', 'admin', 'staff'))
+  );
+
+create policy "Staff can update threads"
+  on public.internal_threads for update
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and role in ('owner', 'admin', 'staff'))
+  );
+
+
+-- Messages within threads
+create table if not exists public.internal_messages (
+  id          uuid primary key default gen_random_uuid(),
+  created_at  timestamptz default now(),
+  thread_id   uuid references public.internal_threads(id) on delete cascade not null,
+  sender_id   uuid references public.profiles(id) on delete set null,
+  sender_name text not null,
+  content     text not null
+);
+
+alter table public.internal_messages enable row level security;
+
+create policy "Staff can view messages"
+  on public.internal_messages for select
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and role in ('owner', 'admin', 'staff'))
+  );
+
+create policy "Staff can send messages"
+  on public.internal_messages for insert
+  with check (
+    exists (select 1 from public.profiles where id = auth.uid() and role in ('owner', 'admin', 'staff'))
+  );
+
+-- Enable realtime for triage
+alter publication supabase_realtime add table public.internal_threads;
+alter publication supabase_realtime add table public.internal_messages;
+
+
+-- ─────────────────────────────────────────────
 -- DONE! ✓
 -- Now go to Authentication → Email Templates and configure your emails.
 -- Then create your first staff user in Authentication → Users.
