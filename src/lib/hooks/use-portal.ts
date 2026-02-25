@@ -91,12 +91,16 @@ export function usePortal(clientId?: string) {
 
   async function clearMessages(cid: string) {
     if (!configured) return;
-    // Use the authenticated client directly (same pattern as sendMessage / handleDeleteFile)
-    const { error } = await supabase
-      .from('portal_messages')
-      .delete()
-      .eq('client_id', cid);
-    if (error) throw new Error(error.message);
+    // Use service-role API route (same pattern as delete-thread-messages which works)
+    const res = await fetch('/api/delete-portal-messages', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: cid }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? `Failed (${res.status})`);
+    }
     await fetchData();
   }
 

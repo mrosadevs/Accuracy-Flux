@@ -31,7 +31,6 @@ function AddEntryModal({ onClose, onSave }: {
   const { clients }   = useClients();
   const { workItems } = useWorkItems();
 
-  const [description, setDescription] = useState('');
   const [clientId,    setClientId]    = useState('');
   const [workItemId,  setWorkItemId]  = useState('');
   const [taskId,      setTaskId]      = useState('');
@@ -54,16 +53,7 @@ function AddEntryModal({ onClose, onSave }: {
     setTaskId('');
     if (!wid) return;
     const wi = workItems.find(w => w.id === wid);
-    if (!wi) return;
-    if (!description) setDescription(wi.title);
-    if (!clientId && wi.client_id) setClientId(wi.client_id);
-  }
-
-  function handleTaskChange(tid: string) {
-    setTaskId(tid);
-    if (!tid) return;
-    const task = availableTasks.find(t => t.id === tid);
-    if (task?.title) setDescription(task.title);
+    if (wi && !clientId && wi.client_id) setClientId(wi.client_id);
   }
 
   function handleClientChange(cid: string) {
@@ -75,14 +65,17 @@ function AddEntryModal({ onClose, onSave }: {
   }
 
   async function handleSave() {
-    if (!description.trim() || !hours) { setError('Description and hours are required.'); return; }
+    if (!hours) { setError('Hours are required.'); return; }
     const h = parseFloat(hours);
     if (isNaN(h) || h <= 0) { setError('Enter a valid number of hours.'); return; }
     setSaving(true);
     try {
       const selectedClient = clients.find(c => c.id === clientId);
+      const selectedTask = availableTasks.find(t => t.id === taskId);
+      const selectedWorkItem = workItems.find(w => w.id === workItemId);
+      const description = selectedTask?.title ?? selectedWorkItem?.title ?? '';
       await onSave({
-        description: description.trim(),
+        description,
         clientId: clientId || null,
         clientName: selectedClient?.name ?? '',
         workItemId: workItemId || null,
@@ -90,7 +83,10 @@ function AddEntryModal({ onClose, onSave }: {
         hours: h, date, billable,
       });
       onClose();
-    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed to save'); }
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message ?? 'Failed to save';
+      setError(msg);
+    }
     finally { setSaving(false); }
   }
 
@@ -136,7 +132,7 @@ function AddEntryModal({ onClose, onSave }: {
               <label className="text-xs font-semibold text-text-secondary mb-1.5 flex items-center gap-1.5">
                 <ListChecks className="w-3 h-3 text-primary-500" />Task
               </label>
-              <select value={taskId} onChange={e => handleTaskChange(e.target.value)}
+              <select value={taskId} onChange={e => setTaskId(e.target.value)}
                 className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-primary-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
                 <option value="">No specific task</option>
                 {availableTasks.map(t => (
@@ -145,12 +141,6 @@ function AddEntryModal({ onClose, onSave }: {
               </select>
             </motion.div>
           )}
-
-          <div>
-            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Description *</label>
-            <input type="text" placeholder="What did you work on?" value={description} onChange={e => setDescription(e.target.value)}
-              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
-          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -195,7 +185,6 @@ function StartTimerModal({ onClose, onStart }: {
   const { clients }   = useClients();
   const { workItems } = useWorkItems();
 
-  const [description, setDescription] = useState('');
   const [clientId,    setClientId]    = useState('');
   const [workItemId,  setWorkItemId]  = useState('');
   const [taskId,      setTaskId]      = useState('');
@@ -218,16 +207,7 @@ function StartTimerModal({ onClose, onStart }: {
     setTaskId('');
     if (!wid) return;
     const wi = workItems.find(w => w.id === wid);
-    if (!wi) return;
-    if (!description) setDescription(wi.title);
-    if (!clientId && wi.client_id) setClientId(wi.client_id);
-  }
-
-  function handleTaskChange(tid: string) {
-    setTaskId(tid);
-    if (!tid) return;
-    const task = availableTasks.find(t => t.id === tid);
-    if (task?.title) setDescription(task.title);
+    if (wi && !clientId && wi.client_id) setClientId(wi.client_id);
   }
 
   function handleClientChange(cid: string) {
@@ -239,11 +219,12 @@ function StartTimerModal({ onClose, onStart }: {
   }
 
   function handleStart() {
-    if (!description.trim()) { setError('Enter a description for the task.'); return; }
+    if (!workItemId) { setError('Please select a work item.'); return; }
     const selectedClient = clients.find(c => c.id === clientId);
     const selectedTask = availableTasks.find(t => t.id === taskId);
+    const description = selectedTask?.title ?? selectedWorkItem?.title ?? '';
     onStart({
-      description: description.trim(),
+      description,
       clientId: clientId || null,
       clientName: selectedClient?.name ?? '',
       workItemId: workItemId || null,
@@ -305,7 +286,7 @@ function StartTimerModal({ onClose, onStart }: {
               <label className="text-xs font-semibold text-text-secondary mb-1.5 flex items-center gap-1.5">
                 <ListChecks className="w-3 h-3 text-primary-500" />Task
               </label>
-              <select value={taskId} onChange={e => handleTaskChange(e.target.value)}
+              <select value={taskId} onChange={e => setTaskId(e.target.value)}
                 className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-primary-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
                 <option value="">No specific task</option>
                 {availableTasks.map(t => (
@@ -314,13 +295,6 @@ function StartTimerModal({ onClose, onStart }: {
               </select>
             </motion.div>
           )}
-
-          <div>
-            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">What are you working on? *</label>
-            <input type="text" placeholder="e.g. Tax return preparation" value={description} onChange={e => setDescription(e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && handleStart()}
-              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
-          </div>
 
           <button onClick={() => setBillable(!billable)}
             className={clsx('w-full h-10 px-4 rounded-xl text-xs font-semibold transition-colors border', billable ? 'bg-success/10 border-success/30 text-success' : 'bg-surface-hover border-border text-text-muted')}>

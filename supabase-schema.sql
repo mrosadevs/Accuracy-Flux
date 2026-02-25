@@ -335,6 +335,7 @@ create policy "Clients can send own messages"
 create table if not exists public.time_entries (
   id           uuid primary key default gen_random_uuid(),
   work_item_id uuid references public.work_items(id),
+  task_id      uuid references public.tasks(id) on delete set null,
   client_id    uuid references public.clients(id),
   user_id      uuid references public.profiles(id),
   description  text,

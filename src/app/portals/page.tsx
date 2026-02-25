@@ -43,6 +43,7 @@ function ClientPanel({ client }: { client: Client }) {
   const [addingTask,    setAddingTask]    = useState(false);
   const [showTaskForm,  setShowTaskForm]  = useState(false);
   const [clearingChat,  setClearingChat]  = useState(false);
+  const [uploadCategory, setUploadCategory] = useState('Documents for You');
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -81,10 +82,10 @@ function ClientPanel({ client }: { client: Client }) {
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
-        await uploadDocument(file, client.id, profile?.id ?? 'staff');
+        await uploadDocument(file, client.id, profile?.id ?? 'staff', uploadCategory || 'Documents for You');
       }
     } finally { setUploading(false); }
-  }, [uploadDocument, client.id, profile]);
+  }, [uploadDocument, client.id, profile, uploadCategory]);
 
   /* ── Download ── */
   const handleDownload = async (filePath: string, filename: string) => {
@@ -259,6 +260,21 @@ function ClientPanel({ client }: { client: Client }) {
         {/* ──── FILES ──── */}
         {tab === 'files' && (
           <div className="space-y-4">
+            {/* Category picker */}
+            <div className="flex items-center gap-2">
+              <Tag className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
+              <span className="text-xs font-semibold text-text-secondary whitespace-nowrap">Upload as:</span>
+              <select value={uploadCategory} onChange={e => setUploadCategory(e.target.value)}
+                className="flex-1 h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="Documents for You">Documents for You</option>
+                <option value="Tax Document">Tax Document</option>
+                <option value="Bank Statement">Bank Statement</option>
+                <option value="Invoice">Invoice</option>
+                <option value="Receipt">Receipt</option>
+                <option value="Payroll">Payroll</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
             {/* Upload zone */}
             <div
               onDragOver={e => e.preventDefault()}
