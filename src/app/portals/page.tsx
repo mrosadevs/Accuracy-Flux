@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare, FileText, CheckCircle2, Upload, Download, Trash2,
   Plus, Send, Search, Loader2, X, File, FileSpreadsheet, Image,
-  Shield, Globe, ChevronRight, Clock,
+  Shield, Globe, ChevronRight, Clock, Eraser,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useClients } from '@/lib/hooks/use-clients';
@@ -29,7 +29,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 function ClientPanel({ client }: { client: Client }) {
   const supabase    = useSupabase();
   const { profile } = useProfile();
-  const { documents, messages, loading, uploadDocument, getDownloadUrl, sendMessage, refetch } = usePortal(client.id);
+  const { documents, messages, loading, uploadDocument, clearMessages, getDownloadUrl, sendMessage, refetch } = usePortal(client.id);
   const { workItems, addWorkItem, deleteWorkItem } = useWorkItems();
 
   const clientWorkItems = workItems.filter(w => w.client_id === client.id);
@@ -42,6 +42,7 @@ function ClientPanel({ client }: { client: Client }) {
   const [newTaskDue,    setNewTaskDue]    = useState('');
   const [addingTask,    setAddingTask]    = useState(false);
   const [showTaskForm,  setShowTaskForm]  = useState(false);
+  const [clearingChat,  setClearingChat]  = useState(false);
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -83,7 +84,7 @@ function ClientPanel({ client }: { client: Client }) {
         await uploadDocument(file, client.id, profile?.id ?? 'staff');
       }
     } finally { setUploading(false); }
-  }, [uploadDocument, client.id]);
+  }, [uploadDocument, client.id, profile]);
 
   /* ── Download ── */
   const handleDownload = async (filePath: string, filename: string) => {
@@ -173,6 +174,23 @@ function ClientPanel({ client }: { client: Client }) {
         {/* ──── MESSAGES ──── */}
         {tab === 'messages' && (
           <div className="flex flex-col h-full" style={{ minHeight: 400 }}>
+            {/* Clear chat button */}
+            {messages.length > 0 && (
+              <div className="flex justify-end mb-2">
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Clear all messages with ${client.name}? This cannot be undone.`)) return;
+                    setClearingChat(true);
+                    try { await clearMessages(client.id); } finally { setClearingChat(false); }
+                  }}
+                  disabled={clearingChat}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-text-muted hover:text-danger hover:bg-danger/5 transition-colors disabled:opacity-40"
+                >
+                  {clearingChat ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eraser className="w-3 h-3" />}
+                  Clear conversation
+                </button>
+              </div>
+            )}
             <div className="flex-1 space-y-3 mb-4 overflow-y-auto">
               {loading ? (
                 <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 text-primary-400 animate-spin" /></div>

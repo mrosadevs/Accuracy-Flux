@@ -76,8 +76,30 @@ export function usePortal(clientId?: string) {
 
   async function deleteDocument(docId: string, filePath: string) {
     if (!configured) return;
+    // Safety guard: only allow deleting files the client uploaded (uploaded_by IS NULL)
+    const { data: docRecord } = await supabase
+      .from('portal_documents')
+      .select('uploaded_by')
+      .eq('id', docId)
+      .single();
+    if (!docRecord || docRecord.uploaded_by !== null) return; // silently refuse staff files
     await supabase.storage.from('portal-documents').remove([filePath]);
-    await supabase.from('portal_documents').delete().eq('id', docId);
+    // Double guard: .is('uploaded_by', null) ensures DB delete only applies to client files
+    await supabase.from('portal_documents').delete().eq('id', docId).is('uploaded_by', null);
+    await fetchData();
+  }
+
+  async function clearMessages(cid: string) {
+    if (!configured) return;
+    const res = await fetch('/api/delete-portal-messages', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: cid }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error ?? 'Failed to clear messages');
+    }
     await fetchData();
   }
 
@@ -98,7 +120,7 @@ export function usePortal(clientId?: string) {
     return data;
   }
 
-  return { documents, messages, loading, uploadDocument, deleteDocument, getDownloadUrl, sendMessage, refetch: fetchData };
+  return { documents, messages, loading, uploadDocument, deleteDocument, clearMessages, getDownloadUrl, sendMessage, refetch: fetchData };
 }
 
 // Hook to load the current portal user's linked client + their work items
@@ -117,12 +139,10 @@ export function usePortalClient() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setAuthLoading(false); return; }
 
-      // Get profile role for auth guard
       const { data: profileData } = await supabase
         .from('profiles').select('role').eq('id', user.id).single();
       setUserRole(profileData?.role ?? null);
 
-      // Find the client record linked to this portal user
       const { data: clientData } = await supabase
         .from('clients')
         .select('*')
@@ -131,7 +151,6 @@ export function usePortalClient() {
 
       if (clientData) {
         setClient(clientData);
-        // Load work items assigned to this client
         const { data: items } = await supabase
           .from('work_items')
           .select('id, title, status, priority, due_date, type')
