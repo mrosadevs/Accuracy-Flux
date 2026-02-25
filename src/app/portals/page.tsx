@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare, FileText, CheckCircle2, Upload, Download, Trash2,
   Plus, Send, Search, Loader2, X, File, FileSpreadsheet, Image,
-  Shield, Globe, ChevronRight, Clock, Eraser,
+  Shield, Globe, ChevronRight, Clock, Eraser, Tag,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useClients } from '@/lib/hooks/use-clients';
@@ -181,7 +181,13 @@ function ClientPanel({ client }: { client: Client }) {
                   onClick={async () => {
                     if (!confirm(`Clear all messages with ${client.name}? This cannot be undone.`)) return;
                     setClearingChat(true);
-                    try { await clearMessages(client.id); } finally { setClearingChat(false); }
+                    try {
+                      await clearMessages(client.id);
+                    } catch (err) {
+                      alert(`Failed to clear messages: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                    } finally {
+                      setClearingChat(false);
+                    }
                   }}
                   disabled={clearingChat}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-text-muted hover:text-danger hover:bg-danger/5 transition-colors disabled:opacity-40"
@@ -277,7 +283,7 @@ function ClientPanel({ client }: { client: Client }) {
               )}
             </div>
 
-            {/* File list */}
+            {/* File list — grouped by category · bank */}
             {loading ? (
               <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 text-primary-400 animate-spin" /></div>
             ) : documents.length === 0 ? (
@@ -285,55 +291,95 @@ function ClientPanel({ client }: { client: Client }) {
                 <FileText className="w-8 h-8 text-text-muted/20 mx-auto mb-2" />
                 <p className="text-sm text-text-muted">No files yet</p>
               </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-border overflow-hidden">
-                <div className="grid grid-cols-[auto_1fr_auto_auto] gap-3 px-4 py-2.5 border-b border-border bg-surface-hover/50">
-                  {['', 'File', 'Size', ''].map((h, i) => (
-                    <span key={i} className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{h}</span>
-                  ))}
+            ) : (() => {
+              // Build groups: key = description (e.g. "Bank Statement · Chase") or "__none__"
+              const groups: Record<string, typeof documents> = {};
+              documents.forEach(doc => {
+                const key = doc.description ?? '__none__';
+                groups[key] = [...(groups[key] ?? []), doc];
+              });
+              const keys = Object.keys(groups).sort((a, b) => {
+                if (a === '__none__') return 1;
+                if (b === '__none__') return -1;
+                return a.localeCompare(b);
+              });
+              return (
+                <div className="space-y-4">
+                  {keys.map(groupKey => {
+                    const group = groups[groupKey];
+                    const parts = groupKey === '__none__' ? [] : groupKey.split(' · ');
+                    const category = parts[0] ?? null;
+                    const bankName = parts[1] ?? null;
+                    return (
+                      <div key={groupKey} className="bg-card rounded-xl border border-border overflow-hidden">
+                        {/* Group header */}
+                        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-hover/50">
+                          <Tag className="w-3 h-3 text-text-muted flex-shrink-0" />
+                          <span className="text-[11px] font-semibold text-text-primary">
+                            {category ?? 'No Category'}
+                          </span>
+                          {bankName && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 bg-primary-50 text-primary-600 rounded-full">
+                              {bankName}
+                            </span>
+                          )}
+                          <span className="ml-auto text-[10px] text-text-muted">
+                            {group.length} file{group.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        {/* Files in group */}
+                        {group.map((doc, i) => {
+                          const ext = doc.filename.split('.').pop()?.toLowerCase() ?? '';
+                          const FileIcon = ext === 'pdf' ? FileText
+                            : ext === 'xlsx' || ext === 'xls' ? FileSpreadsheet
+                            : ext === 'jpg' || ext === 'jpeg' || ext === 'png' ? Image
+                            : File;
+                          const sizeFmt = doc.file_size
+                            ? doc.file_size > 1024 * 1024 ? `${(doc.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.round(doc.file_size / 1024)} KB`
+                            : '—';
+                          const isClientUpload = doc.uploaded_by === null;
+                          return (
+                            <motion.div key={doc.id}
+                              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
+                              className="grid grid-cols-[auto_1fr_auto_auto] gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-surface-hover transition-colors items-center group">
+                              <div className="w-8 h-8 rounded-lg bg-primary-50/70 flex items-center justify-center">
+                                <FileIcon className="w-4 h-4 text-primary-600" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium text-text-primary truncate">{doc.filename}</p>
+                                  {isClientUpload && (
+                                    <span className="text-[9px] font-semibold px-1.5 py-0.5 bg-accent-500/10 text-accent-600 rounded-full flex-shrink-0">
+                                      Client
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-text-muted">
+                                  {new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </p>
+                              </div>
+                              <p className="text-xs text-text-muted whitespace-nowrap">{sizeFmt}</p>
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <motion.button onClick={() => handleDownload(doc.file_path, doc.filename)}
+                                  whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                                  className="p-1.5 rounded-lg hover:bg-primary-50 text-text-muted hover:text-primary-600 transition-colors" title="Download">
+                                  <Download className="w-3.5 h-3.5" />
+                                </motion.button>
+                                <motion.button onClick={() => handleDeleteFile(doc.id, doc.file_path)}
+                                  whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                                  className="p-1.5 rounded-lg hover:bg-danger/10 text-text-muted hover:text-danger transition-colors" title="Delete">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </motion.button>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
                 </div>
-                {documents.map((doc, i) => {
-                  const ext = doc.filename.split('.').pop()?.toLowerCase() ?? '';
-                  const FileIcon = ext === 'pdf' ? FileText
-                    : ext === 'xlsx' || ext === 'xls' ? FileSpreadsheet
-                    : ext === 'jpg' || ext === 'jpeg' || ext === 'png' ? Image
-                    : File;
-                  const sizeFmt = doc.file_size
-                    ? doc.file_size > 1024 * 1024 ? `${(doc.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.round(doc.file_size / 1024)} KB`
-                    : '—';
-                  return (
-                    <motion.div key={doc.id}
-                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                      className="grid grid-cols-[auto_1fr_auto_auto] gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-surface-hover transition-colors items-center group">
-                      <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center">
-                        <FileIcon className="w-4 h-4 text-primary-600" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-text-primary truncate">{doc.filename}</p>
-                        <p className="text-[10px] text-text-muted">
-                          {new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                      </div>
-                      <p className="text-xs text-text-muted whitespace-nowrap">{sizeFmt}</p>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <motion.button onClick={() => handleDownload(doc.file_path, doc.filename)}
-                          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                          className="p-1.5 rounded-lg hover:bg-primary-50 text-text-muted hover:text-primary-600 transition-colors"
-                          title="Download">
-                          <Download className="w-3.5 h-3.5" />
-                        </motion.button>
-                        <motion.button onClick={() => handleDeleteFile(doc.id, doc.file_path)}
-                          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                          className="p-1.5 rounded-lg hover:bg-danger/10 text-text-muted hover:text-danger transition-colors"
-                          title="Delete">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </motion.button>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 

@@ -91,15 +91,12 @@ export function usePortal(clientId?: string) {
 
   async function clearMessages(cid: string) {
     if (!configured) return;
-    const res = await fetch('/api/delete-portal-messages', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId: cid }),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error ?? 'Failed to clear messages');
-    }
+    // Use the authenticated client directly (same pattern as sendMessage / handleDeleteFile)
+    const { error } = await supabase
+      .from('portal_messages')
+      .delete()
+      .eq('client_id', cid);
+    if (error) throw new Error(error.message);
     await fetchData();
   }
 
