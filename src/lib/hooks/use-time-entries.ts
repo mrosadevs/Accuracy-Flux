@@ -7,6 +7,8 @@ import { useProfile } from "./use-profile";
 export interface TimeEntry {
   id: string;
   work_item_id: string | null;
+  task_id: string | null;
+  task_name?: string;
   client_id: string | null;
   client_name?: string;
   user_id: string | null;
@@ -24,9 +26,11 @@ export interface ActiveTimer {
   clientId: string | null;
   clientName: string;
   workItemId: string | null;
+  workItemTitle: string;
+  taskId: string | null;
+  taskName: string;
   startedAt: number;
   billable: boolean;
-  amount: number;   // Total amount charged for the job (rate is derived on stop)
 }
 
 const LS_KEY = "af_active_timer";
@@ -71,7 +75,7 @@ export function useTimeEntries() {
     if (!configured) { setLoading(false); return; }
     const { data } = await supabase
       .from("time_entries")
-      .select("*, profiles(name), clients(name)")
+      .select("*, profiles(name), clients(name), tasks(title)")
       .order("date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(100);
@@ -86,6 +90,7 @@ export function useTimeEntries() {
             ...(e as unknown as TimeEntry),
             user_name: (e.profiles as { name?: string } | null)?.name ?? "Me",
             client_name: (e.clients as { name?: string } | null)?.name ?? "",
+            task_name: (e.tasks as { title?: string } | null)?.title ?? undefined,
           }))
       );
     }
@@ -127,18 +132,16 @@ export function useTimeEntries() {
     const hours = Math.round((finalElapsed / 3600) * 100) / 100;
     if (hours <= 0) return;
 
-    // Derive hourly rate from the total amount charged ÷ actual hours
-    const rate = hours > 0 && current.amount > 0 ? current.amount / hours : 0;
-
     await supabase.from("time_entries").insert({
       work_item_id: current.workItemId,
+      task_id: current.taskId,
       client_id: current.clientId,
       user_id: profile.id,
       description: current.description,
       hours,
       date: new Date().toISOString().split("T")[0],
       billable: current.billable,
-      rate,
+      rate: 0,
     });
 
     // Sync time_spent on linked work item
@@ -159,23 +162,24 @@ export function useTimeEntries() {
     clientId: string | null;
     clientName: string;
     workItemId?: string | null;
+    taskId?: string | null;
     hours: number;
     date: string;
     billable: boolean;
-    rate: number;
   }) {
     if (!configured || !profile) return null;
     const { data, error } = await supabase
       .from("time_entries")
       .insert({
         work_item_id: input.workItemId ?? null,
+        task_id: input.taskId ?? null,
         client_id: input.clientId,
         user_id: profile.id,
         description: input.description,
         hours: input.hours,
         date: input.date,
         billable: input.billable,
-        rate: input.rate,
+        rate: 0,
       })
       .select().single();
     if (error) throw error;

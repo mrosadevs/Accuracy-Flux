@@ -285,6 +285,30 @@ body {
 /* === DARK MODE CARDS === */
 .dark .bg-white { background-color: var(--card); }
 
+/* Fix hard-coded light color badges/backgrounds that look jarring in dark mode */
+.dark .bg-green-50 { background-color: rgba(16, 185, 129, 0.12) !important; }
+.dark .hover\:bg-green-100:hover { background-color: rgba(16, 185, 129, 0.2) !important; }
+.dark .text-green-700 { color: #34d399 !important; }
+.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.12) !important; }
+.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.12) !important; }
+.dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.12) !important; }
+.dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.12) !important; }
+.dark .bg-pink-50 { background-color: rgba(236, 72, 153, 0.12) !important; }
+.dark .bg-cyan-50 { background-color: rgba(6, 182, 212, 0.12) !important; }
+.dark .bg-slate-100 { background-color: rgba(148, 163, 184, 0.12) !important; }
+.dark .text-blue-700 { color: #93c5fd !important; }
+.dark .text-amber-700 { color: #fcd34d !important; }
+.dark .text-purple-700 { color: #d8b4fe !important; }
+.dark .text-pink-700 { color: #f9a8d4 !important; }
+.dark .text-cyan-700 { color: #67e8f9 !important; }
+.dark .text-slate-600 { color: #94a3b8 !important; }
+.dark .border-green-200 { border-color: rgba(16, 185, 129, 0.25) !important; }
+.dark .border-blue-200 { border-color: rgba(59, 130, 246, 0.25) !important; }
+.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.25) !important; }
+
+/* Fix white gradient overlays used for card hover action buttons */
+.dark .from-white { --tw-gradient-from: var(--card) !important; }
+
 /* === RESPONSIVE === */
 @media (min-width: 2560px) { html { font-size: 18px; } }
 @media (min-width: 3840px) { html { font-size: 20px; } }

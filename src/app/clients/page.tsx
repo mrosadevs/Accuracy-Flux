@@ -576,14 +576,14 @@ export default function ClientsPage() {
                   )}
                 </div>
                 {/* Hover actions */}
-                <div className="absolute bottom-0 left-0 right-0 p-3 flex gap-2 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-200 bg-gradient-to-t from-white via-white/95 to-transparent rounded-b-2xl">
+                <div className="absolute bottom-0 left-0 right-0 p-3 flex gap-2 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-200 bg-gradient-to-t from-card via-card/95 to-transparent rounded-b-2xl">
                   <motion.button onClick={e => { e.stopPropagation(); setInvoiceClient(client); }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 transition-colors">
                     <FileText className="w-3 h-3" />Invoice
                   </motion.button>
                   <motion.button onClick={e => { e.stopPropagation(); setInviteClient(client); }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     className={clsx('flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-semibold transition-colors',
-                      client.portal_user_id ? 'text-green-700 bg-green-50 hover:bg-green-100' : 'text-text-secondary bg-surface-hover hover:bg-border')}>
+                      client.portal_user_id ? 'text-success bg-success/10 hover:bg-success/20' : 'text-text-secondary bg-surface-hover hover:bg-border')}>
                     <Lock className="w-3 h-3" />{client.portal_user_id ? 'Portal ✓' : 'Portal Invite'}
                   </motion.button>
                 </div>

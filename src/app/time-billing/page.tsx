@@ -8,8 +8,8 @@ import { useInvoices } from '@/lib/hooks/use-invoices';
 import { useClients } from '@/lib/hooks/use-clients';
 import { useWorkItems } from '@/lib/hooks/use-work-items';
 import {
-  Play, Square, Clock, DollarSign, TrendingUp, AlertCircle,
-  Plus, FileText, MoreHorizontal, X, Save, Loader2, CheckCircle, Trash2, Link2
+  Play, Square, Clock, TrendingUp, AlertCircle,
+  Plus, FileText, MoreHorizontal, X, Save, Loader2, CheckCircle, Trash2, Link2, ListChecks
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -25,7 +25,7 @@ function AddEntryModal({ onClose, onSave }: {
   onClose: () => void;
   onSave: (data: {
     description: string; clientId: string | null; clientName: string;
-    workItemId: string | null; hours: number; date: string; billable: boolean; rate: number;
+    workItemId: string | null; taskId: string | null; hours: number; date: string; billable: boolean;
   }) => Promise<void>;
 }) {
   const { clients }   = useClients();
@@ -34,21 +34,24 @@ function AddEntryModal({ onClose, onSave }: {
   const [description, setDescription] = useState('');
   const [clientId,    setClientId]    = useState('');
   const [workItemId,  setWorkItemId]  = useState('');
+  const [taskId,      setTaskId]      = useState('');
   const [hours,       setHours]       = useState('');
-  const [amount,      setAmount]      = useState('');   // Amount charged (not rate)
   const [date,        setDate]        = useState(new Date().toISOString().split('T')[0]);
   const [billable,    setBillable]    = useState(true);
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState('');
 
-  // Work items filtered by selected client
   const filteredWorkItems = workItems.filter(w =>
-    !clientId || w.client_id === clientId || (!w.client_id && !clientId)
+    !clientId || w.client_id === clientId
   );
 
-  // Auto-fill from work item
+  const availableTasks = workItemId
+    ? (workItems.find(w => w.id === workItemId)?.tasks ?? [])
+    : [];
+
   function handleWorkItemChange(wid: string) {
     setWorkItemId(wid);
+    setTaskId('');
     if (!wid) return;
     const wi = workItems.find(w => w.id === wid);
     if (!wi) return;
@@ -56,29 +59,25 @@ function AddEntryModal({ onClose, onSave }: {
     if (!clientId && wi.client_id) setClientId(wi.client_id);
   }
 
-  // Auto-fill from client (reset work item if client changes)
+  function handleTaskChange(tid: string) {
+    setTaskId(tid);
+    if (!tid) return;
+    const task = availableTasks.find(t => t.id === tid);
+    if (task?.title) setDescription(task.title);
+  }
+
   function handleClientChange(cid: string) {
     setClientId(cid);
     if (workItemId) {
       const wi = workItems.find(w => w.id === workItemId);
-      if (wi && wi.client_id && wi.client_id !== cid) setWorkItemId('');
+      if (wi && wi.client_id && wi.client_id !== cid) { setWorkItemId(''); setTaskId(''); }
     }
   }
-
-  // Computed effective rate shown as hint
-  const effectiveRate = (() => {
-    const h = parseFloat(hours);
-    const a = parseFloat(amount);
-    if (h > 0 && a > 0) return `$${(a / h).toFixed(2)}/hr`;
-    return null;
-  })();
 
   async function handleSave() {
     if (!description.trim() || !hours) { setError('Description and hours are required.'); return; }
     const h = parseFloat(hours);
     if (isNaN(h) || h <= 0) { setError('Enter a valid number of hours.'); return; }
-    const a = parseFloat(amount) || 0;
-    const rate = (a > 0 && h > 0) ? a / h : 0;  // derive rate from amount/hours
     setSaving(true);
     try {
       const selectedClient = clients.find(c => c.id === clientId);
@@ -87,7 +86,8 @@ function AddEntryModal({ onClose, onSave }: {
         clientId: clientId || null,
         clientName: selectedClient?.name ?? '',
         workItemId: workItemId || null,
-        hours: h, date, billable, rate,
+        taskId: taskId || null,
+        hours: h, date, billable,
       });
       onClose();
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed to save'); }
@@ -110,12 +110,6 @@ function AddEntryModal({ onClose, onSave }: {
           {error && <div className="flex items-center gap-2 px-3 py-2 bg-danger/5 border border-danger/20 rounded-xl text-xs text-danger"><AlertCircle className="w-3.5 h-3.5" />{error}</div>}
 
           <div>
-            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Description *</label>
-            <input type="text" placeholder="What did you work on?" value={description} onChange={e => setDescription(e.target.value)}
-              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
-          </div>
-
-          <div>
             <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client</label>
             <select value={clientId} onChange={e => handleClientChange(e.target.value)}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
@@ -125,8 +119,8 @@ function AddEntryModal({ onClose, onSave }: {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-text-secondary mb-1.5 block flex items-center gap-1.5">
-              <Link2 className="w-3 h-3" />Link to Work Item
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 flex items-center gap-1.5">
+              <Link2 className="w-3 h-3" />Work Item
             </label>
             <select value={workItemId} onChange={e => handleWorkItemChange(e.target.value)}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
@@ -135,6 +129,27 @@ function AddEntryModal({ onClose, onSave }: {
                 <option key={w.id} value={w.id}>{w.title}{w.client_name ? ` (${w.client_name})` : ''}</option>
               ))}
             </select>
+          </div>
+
+          {workItemId && availableTasks.length > 0 && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 flex items-center gap-1.5">
+                <ListChecks className="w-3 h-3 text-primary-500" />Task
+              </label>
+              <select value={taskId} onChange={e => handleTaskChange(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-primary-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="">No specific task</option>
+                {availableTasks.map(t => (
+                  <option key={t.id} value={t.id}>{t.title}{t.assignee ? ` — ${t.assignee}` : ''}</option>
+                ))}
+              </select>
+            </motion.div>
+          )}
+
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Description *</label>
+            <input type="text" placeholder="What did you work on?" value={description} onChange={e => setDescription(e.target.value)}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -150,23 +165,10 @@ function AddEntryModal({ onClose, onSave }: {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">
-                Amount Charged ($)
-                {effectiveRate && <span className="ml-1.5 font-normal text-text-muted">= {effectiveRate}</span>}
-              </label>
-              <input type="number" min="0" step="0.01" placeholder="225.00" value={amount} onChange={e => setAmount(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
-            </div>
-            <div className="flex flex-col justify-end pb-0.5">
-              <label className="text-xs font-semibold text-text-secondary mb-2 block">Billable</label>
-              <button onClick={() => setBillable(!billable)}
-                className={clsx('h-10 px-4 rounded-xl text-xs font-semibold transition-colors border', billable ? 'bg-success/10 border-success/30 text-success' : 'bg-surface-hover border-border text-text-muted')}>
-                {billable ? 'Billable' : 'Non-billable'}
-              </button>
-            </div>
-          </div>
+          <button onClick={() => setBillable(!billable)}
+            className={clsx('w-full h-10 px-4 rounded-xl text-xs font-semibold transition-colors border', billable ? 'bg-success/10 border-success/30 text-success' : 'bg-surface-hover border-border text-text-muted')}>
+            {billable ? '✓ Billable' : 'Non-billable'}
+          </button>
 
           <div className="flex gap-3 pt-1">
             <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
@@ -186,7 +188,7 @@ function StartTimerModal({ onClose, onStart }: {
   onClose: () => void;
   onStart: (data: {
     description: string; clientId: string | null; clientName: string;
-    workItemId: string | null; billable: boolean; amount: number;
+    workItemId: string | null; workItemTitle: string; taskId: string | null; taskName: string; billable: boolean;
   }) => void;
 }) {
   const { clients }   = useClients();
@@ -195,16 +197,21 @@ function StartTimerModal({ onClose, onStart }: {
   const [description, setDescription] = useState('');
   const [clientId,    setClientId]    = useState('');
   const [workItemId,  setWorkItemId]  = useState('');
+  const [taskId,      setTaskId]      = useState('');
   const [billable,    setBillable]    = useState(true);
-  const [amount,      setAmount]      = useState('');
   const [error,       setError]       = useState('');
 
   const filteredWorkItems = workItems.filter(w =>
-    !clientId || w.client_id === clientId || (!w.client_id && !clientId)
+    !clientId || w.client_id === clientId
   );
+
+  const availableTasks = workItemId
+    ? (workItems.find(w => w.id === workItemId)?.tasks ?? [])
+    : [];
 
   function handleWorkItemChange(wid: string) {
     setWorkItemId(wid);
+    setTaskId('');
     if (!wid) return;
     const wi = workItems.find(w => w.id === wid);
     if (!wi) return;
@@ -212,24 +219,35 @@ function StartTimerModal({ onClose, onStart }: {
     if (!clientId && wi.client_id) setClientId(wi.client_id);
   }
 
+  function handleTaskChange(tid: string) {
+    setTaskId(tid);
+    if (!tid) return;
+    const task = availableTasks.find(t => t.id === tid);
+    if (task?.title) setDescription(task.title);
+  }
+
   function handleClientChange(cid: string) {
     setClientId(cid);
     if (workItemId) {
       const wi = workItems.find(w => w.id === workItemId);
-      if (wi && wi.client_id && wi.client_id !== cid) setWorkItemId('');
+      if (wi && wi.client_id && wi.client_id !== cid) { setWorkItemId(''); setTaskId(''); }
     }
   }
 
   function handleStart() {
     if (!description.trim()) { setError('Enter a description for the task.'); return; }
     const selectedClient = clients.find(c => c.id === clientId);
+    const selectedWorkItem = workItems.find(w => w.id === workItemId);
+    const selectedTask = availableTasks.find(t => t.id === taskId);
     onStart({
       description: description.trim(),
       clientId: clientId || null,
       clientName: selectedClient?.name ?? '',
       workItemId: workItemId || null,
+      workItemTitle: selectedWorkItem?.title ?? '',
+      taskId: taskId || null,
+      taskName: selectedTask?.title ?? '',
       billable,
-      amount: parseFloat(amount) || 0,
     });
     onClose();
   }
@@ -248,13 +266,6 @@ function StartTimerModal({ onClose, onStart }: {
           {error && <div className="flex items-center gap-2 px-3 py-2 bg-danger/5 border border-danger/20 rounded-xl text-xs text-danger"><AlertCircle className="w-3.5 h-3.5" />{error}</div>}
 
           <div>
-            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">What are you working on? *</label>
-            <input type="text" placeholder="e.g. Tax return preparation" value={description} onChange={e => setDescription(e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && handleStart()}
-              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
-          </div>
-
-          <div>
             <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client</label>
             <select value={clientId} onChange={e => handleClientChange(e.target.value)}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
@@ -264,8 +275,8 @@ function StartTimerModal({ onClose, onStart }: {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-text-secondary mb-1.5 block flex items-center gap-1.5">
-              <Link2 className="w-3 h-3" />Link to Work Item
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 flex items-center gap-1.5">
+              <Link2 className="w-3 h-3" />Work Item
             </label>
             <select value={workItemId} onChange={e => handleWorkItemChange(e.target.value)}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
@@ -276,23 +287,32 @@ function StartTimerModal({ onClose, onStart }: {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">
-                Amount Charged ($)
-                <span className="ml-1 font-normal text-text-muted">Rate auto-calculated on stop</span>
+          {workItemId && availableTasks.length > 0 && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+              <label className="text-xs font-semibold text-text-secondary mb-1.5 flex items-center gap-1.5">
+                <ListChecks className="w-3 h-3 text-primary-500" />Task
               </label>
-              <input type="number" min="0" step="0.01" placeholder="225.00" value={amount} onChange={e => setAmount(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
-            </div>
-            <div className="flex flex-col justify-end pb-0.5">
-              <label className="text-xs font-semibold text-text-secondary mb-2 block">Billable</label>
-              <button onClick={() => setBillable(!billable)}
-                className={clsx('h-10 px-4 rounded-xl text-xs font-semibold transition-colors border', billable ? 'bg-success/10 border-success/30 text-success' : 'bg-surface-hover border-border text-text-muted')}>
-                {billable ? 'Billable' : 'Non-billable'}
-              </button>
-            </div>
+              <select value={taskId} onChange={e => handleTaskChange(e.target.value)}
+                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-primary-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
+                <option value="">No specific task</option>
+                {availableTasks.map(t => (
+                  <option key={t.id} value={t.id}>{t.title}{t.assignee ? ` — ${t.assignee}` : ''}</option>
+                ))}
+              </select>
+            </motion.div>
+          )}
+
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">What are you working on? *</label>
+            <input type="text" placeholder="e.g. Tax return preparation" value={description} onChange={e => setDescription(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && handleStart()}
+              className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
           </div>
+
+          <button onClick={() => setBillable(!billable)}
+            className={clsx('w-full h-10 px-4 rounded-xl text-xs font-semibold transition-colors border', billable ? 'bg-success/10 border-success/30 text-success' : 'bg-surface-hover border-border text-text-muted')}>
+            {billable ? '✓ Billable' : 'Non-billable'}
+          </button>
 
           <div className="flex gap-3 pt-1">
             <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
@@ -312,7 +332,7 @@ export default function TimeBillingPage() {
   const {
     entries, loading: entriesLoading, activeTimer, elapsed, elapsedFormatted,
     startTimer, stopTimer, addManualEntry, deleteEntry,
-    hoursThisWeek, billableAmountWeek,
+    hoursThisWeek, hoursThisMonth,
   } = useTimeEntries();
   const { invoices, loading: invoicesLoading, outstanding, updateInvoiceStatus } = useInvoices();
   const [activeTab,      setActiveTab]      = useState<'time' | 'invoices'>('time');
@@ -335,8 +355,6 @@ export default function TimeBillingPage() {
     try { await stopTimer(); } finally { setStoppingTimer(false); }
   }
 
-  const chargedAmount = activeTimer?.amount ?? 0;
-
   return (
     <AppShell title="Time & Billing" subtitle="Track time and manage invoices">
       <AnimatePresence>
@@ -348,10 +366,10 @@ export default function TimeBillingPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Hours This Week',    value: `${Math.round(hoursThisWeek * 10) / 10}h`,          icon: Clock,       color: 'text-primary-600 bg-primary-50'    },
-            { label: 'Billable This Week', value: `$${Math.round(billableAmountWeek).toLocaleString()}`, icon: DollarSign, color: 'text-success bg-success/10'       },
-            { label: 'Total Entries',      value: entries.length,                                        icon: TrendingUp, color: 'text-accent-600 bg-accent-400/10' },
-            { label: 'Outstanding',        value: `$${Math.round(outstanding).toLocaleString()}`,        icon: AlertCircle, color: 'text-warning bg-warning/10'      },
+            { label: 'Hours This Week',  value: `${Math.round(hoursThisWeek * 10) / 10}h`,  icon: Clock,       color: 'text-primary-600 bg-primary-50'    },
+            { label: 'Hours This Month', value: `${Math.round(hoursThisMonth * 10) / 10}h`, icon: Clock,       color: 'text-accent-600 bg-accent-400/10'  },
+            { label: 'Total Entries',    value: entries.length,                               icon: TrendingUp,  color: 'text-success bg-success/10'        },
+            { label: 'Outstanding',      value: `$${Math.round(outstanding).toLocaleString()}`, icon: AlertCircle, color: 'text-warning bg-warning/10'     },
           ].map((stat, i) => (
             <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
               className="bg-white rounded-2xl border border-border p-4">
@@ -382,15 +400,13 @@ export default function TimeBillingPage() {
                     <p className="text-lg font-bold">{activeTimer.description}{activeTimer.clientName ? ` — ${activeTimer.clientName}` : ''}</p>
                     <p className="text-xs opacity-70 mt-0.5">
                       {activeTimer.billable ? 'Billable' : 'Non-billable'}
-                      {chargedAmount > 0 ? ` · Charging $${chargedAmount.toFixed(2)}` : ''}
+                      {activeTimer.taskName ? ` · Task: ${activeTimer.taskName}` : activeTimer.workItemTitle ? ` · ${activeTimer.workItemTitle}` : ''}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-3xl font-mono font-bold tracking-wider">{elapsedFormatted}</p>
-                  {chargedAmount > 0 && (
-                    <p className="text-sm opacity-70 mt-0.5">${chargedAmount.toFixed(2)} charged</p>
-                  )}
+                  <p className="text-xs opacity-60 mt-0.5">elapsed</p>
                 </div>
               </>
             ) : (
@@ -446,31 +462,40 @@ export default function TimeBillingPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-[2fr_1.5fr_0.8fr_0.8fr_0.8fr_0.6fr_auto] gap-4 px-5 py-3 bg-surface-hover/50 border-b border-border">
-                  {['Task', 'Client', 'Hours', 'Amount', 'Date', 'Type', ''].map(h => (
+                <div className="grid grid-cols-[2fr_1.5fr_0.8fr_1.2fr_0.8fr_0.6fr_auto] gap-4 px-5 py-3 bg-surface-hover/50 border-b border-border">
+                  {['Staff / Description', 'Client', 'Hours', 'Task / Work Item', 'Date', 'Type', ''].map(h => (
                     <span key={h} className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{h}</span>
                   ))}
                 </div>
                 {entries.map((entry, i) => (
                   <motion.div key={entry.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
-                    className="grid grid-cols-[2fr_1.5fr_0.8fr_0.8fr_0.8fr_0.6fr_auto] gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-surface-hover/50 transition-colors items-center group">
+                    className="grid grid-cols-[2fr_1.5fr_0.8fr_1.2fr_0.8fr_0.6fr_auto] gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-surface-hover/50 transition-colors items-center group">
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0">
                         {(entry.user_name ?? 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'U'}
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-text-primary truncate">{entry.description || '(no description)'}</p>
-                        <p className="text-[10px] text-text-muted flex items-center gap-1">
-                          {entry.user_name || 'Unknown'}
-                          {entry.work_item_id && <><span>·</span><Link2 className="w-2.5 h-2.5 text-primary-400" /></>}
-                        </p>
+                        <p className="text-[10px] text-text-muted">{entry.user_name || 'Unknown'}</p>
                       </div>
                     </div>
                     <p className="text-xs text-text-secondary truncate">{entry.client_name || '—'}</p>
                     <p className="text-sm font-mono font-semibold text-text-primary">{entry.hours}h</p>
-                    <p className="text-sm font-semibold text-text-primary">
-                      {entry.billable ? `$${(entry.hours * entry.rate).toFixed(2)}` : '—'}
-                    </p>
+                    <div className="min-w-0">
+                      {entry.task_name ? (
+                        <div className="flex items-center gap-1">
+                          <ListChecks className="w-3 h-3 text-primary-400 flex-shrink-0" />
+                          <p className="text-xs text-text-secondary truncate">{entry.task_name}</p>
+                        </div>
+                      ) : entry.work_item_id ? (
+                        <div className="flex items-center gap-1">
+                          <Link2 className="w-3 h-3 text-text-muted flex-shrink-0" />
+                          <p className="text-xs text-text-muted truncate">Work item</p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-text-muted">—</p>
+                      )}
+                    </div>
                     <p className="text-xs text-text-muted">
                       {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </p>

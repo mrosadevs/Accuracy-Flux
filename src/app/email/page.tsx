@@ -8,7 +8,7 @@ import { useProfile } from '@/lib/hooks/use-profile';
 import { isSupabaseConfigured } from '@/lib/hooks/use-supabase';
 import {
   MessageSquare, Plus, Send, X, Users, Bell, Trash2,
-  Loader2, AlertCircle, ChevronRight, CheckCheck, MessagesSquare, MoreHorizontal
+  Loader2, AlertCircle, ChevronRight, CheckCheck, MessagesSquare, MoreHorizontal, Search, Eraser
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -91,7 +91,7 @@ function NewThreadModal({ onClose, onCreate }: { onClose: () => void; onCreate: 
     </motion.div>
   );
 }
-function ThreadItem({ thread, active, onClick, onDelete, onRename }: { thread: InternalThread; active: boolean; onClick: () => void; onDelete: () => void; onRename: () => void }) {
+function ThreadItem({ thread, active, onClick, onDelete, onRename, onClear }: { thread: InternalThread; active: boolean; onClick: () => void; onDelete: () => void; onRename: () => void; onClear: () => void }) {
   const [showMenu, setShowMenu] = useState(false);
   return (
     <div className="relative group/thread">
@@ -124,6 +124,10 @@ function ThreadItem({ thread, active, onClick, onDelete, onRename }: { thread: I
               <button onClick={() => { setShowMenu(false); onRename(); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-surface-hover transition-colors">
                 <svg className="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                 Rename
+              </button>
+              <button onClick={() => { setShowMenu(false); onClear(); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-surface-hover transition-colors">
+                <Eraser className="w-3.5 h-3.5 text-primary-500" />
+                Clear Chat
               </button>
               <button onClick={() => { setShowMenu(false); onDelete(); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-danger hover:bg-danger/5 transition-colors">
                 <Trash2 className="w-3.5 h-3.5" />
@@ -160,13 +164,14 @@ function NotificationItem({ notif, active, onClick }: { notif: PortalNotificatio
 }
 export default function TriagePage() {
   const { profile } = useProfile();
-  const { threads, messages, portalNotifications, loading, selectedThreadId, setSelectedThreadId, selectThread, createThread, sendMessage, deleteThread, renameThread, markPortalRead, bumpPortalMessage, bumpThread, unreadPortalCount } = useTriage();
+  const { threads, messages, portalNotifications, loading, selectedThreadId, setSelectedThreadId, selectThread, createThread, sendMessage, deleteThread, renameThread, clearThread, markPortalRead, bumpPortalMessage, bumpThread, unreadPortalCount } = useTriage();
   const [tab, setTab] = useState<'team' | 'clients'>('team');
   const [showNewThread, setShowNewThread] = useState(false);
   const [messageInput, setMessageInput] = useState('');
   const [sending, setSending] = useState(false);
   const [deleteThreadId, setDeleteThreadId] = useState<string | null>(null);
   const [selectedNotif, setSelectedNotif] = useState<PortalNotification | null>(null);
+  const [threadSearch, setThreadSearch] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const configured = isSupabaseConfigured();
 
@@ -186,6 +191,15 @@ export default function TriagePage() {
     try { await deleteThread(threadId); } catch (e) { console.error(e); }
     setDeleteThreadId(null);
   }
+
+  async function handleClearThread(threadId: string) {
+    if (!confirm('Clear all messages in this thread? The thread will remain.')) return;
+    try { await clearThread(threadId); } catch (e) { console.error(e); }
+  }
+
+  const filteredThreads = threads.filter(t =>
+    !threadSearch.trim() || t.title.toLowerCase().includes(threadSearch.toLowerCase())
+  );
 
   async function handleSelectNotif(notif: PortalNotification) {
     setSelectedNotif(notif); selectThread(null);
@@ -230,11 +244,16 @@ export default function TriagePage() {
           </div>
 
           {tab === 'team' && (
-            <div className="p-3 border-b border-border">
+            <div className="p-3 border-b border-border space-y-2">
               <motion.button onClick={() => setShowNewThread(true)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                 className="w-full h-9 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors">
                 <Plus className="w-3.5 h-3.5" />New Thread
               </motion.button>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+                <input type="text" placeholder="Search threads..." value={threadSearch} onChange={e => setThreadSearch(e.target.value)}
+                  className="w-full h-8 pl-8 pr-3 text-xs bg-surface-hover rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 placeholder:text-text-muted transition-all" />
+              </div>
             </div>
           )}
 
@@ -248,10 +267,16 @@ export default function TriagePage() {
                   <p className="text-xs text-text-muted font-medium">No threads yet</p>
                   <p className="text-[11px] text-text-muted/70 mt-1">Create one to start a team conversation</p>
                 </div>
-              ) : threads.map(thread => (
+              ) : filteredThreads.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                  <Search className="w-8 h-8 text-text-muted/30 mb-2" />
+                  <p className="text-xs text-text-muted font-medium">No threads match &ldquo;{threadSearch}&rdquo;</p>
+                </div>
+              ) : filteredThreads.map(thread => (
                 <ThreadItem key={thread.id} thread={thread} active={selectedThreadId === thread.id}
                   onClick={() => { selectThread(thread.id); setSelectedNotif(null); }}
                   onDelete={() => handleDeleteThread(thread.id)}
+                  onClear={() => handleClearThread(thread.id)}
                   onRename={async () => {
                     const newTitle = prompt("Rename thread:", thread.title);
                     if (newTitle && newTitle.trim() && newTitle.trim() !== thread.title) {

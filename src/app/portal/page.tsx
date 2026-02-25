@@ -6,7 +6,7 @@ import {
   Upload, FileText, Download, CheckCircle2,
   Shield, Lock, Eye, MessageSquare,
   ChevronRight, Zap, File, Image,
-  FileSpreadsheet, Send, LogOut, Loader2, AlertCircle
+  FileSpreadsheet, Send, LogOut, Loader2, AlertCircle, Trash2, Tag
 } from 'lucide-react';
 import clsx from 'clsx';
 import { usePortal, usePortalClient } from '@/lib/hooks/use-portal';
@@ -36,15 +36,18 @@ export default function PortalPage() {
       router.replace('/dashboard');
     }
   }, [authLoading, client, userRole, router]);
-  const { documents, messages, loading, uploadDocument, getDownloadUrl, sendMessage } = usePortal(client?.id);
+  const { documents, messages, loading, uploadDocument, deleteDocument, getDownloadUrl, sendMessage } = usePortal(client?.id);
 
   const [isDragging, setIsDragging]           = useState(false);
   const [uploadProgress, setUploadProgress]   = useState<number | null>(null);
+  const [uploadCategory, setUploadCategory]   = useState('');
   const [activeSection, setActiveSection]     = useState<'tasks' | 'files' | 'messages'>('tasks');
   const [messageText, setMessageText]         = useState('');
   const [sending, setSending]                 = useState(false);
   const [signingOut, setSigningOut]           = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const FILE_CATEGORIES = ['Bank Statement', 'Tax Document', 'Invoice', 'Receipt', 'Payroll', 'Other'];
 
   const pendingCount   = workItems.filter(t => t.status !== 'completed').length;
   const completedCount = workItems.filter(t => t.status === 'completed').length;
@@ -74,7 +77,8 @@ export default function PortalPage() {
         });
       }, 150);
       try {
-        await uploadDocument(file, client.id);
+        // null for uploadedBy = client uploaded; pass category if set
+        await uploadDocument(file, client.id, null, uploadCategory || undefined);
         setUploadProgress(100);
         setTimeout(() => setUploadProgress(null), 1000);
       } catch {
@@ -83,7 +87,7 @@ export default function PortalPage() {
         clearInterval(interval);
       }
     }
-  }, [uploadDocument, client?.id]);
+  }, [uploadDocument, client?.id, uploadCategory]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -314,6 +318,21 @@ export default function PortalPage() {
                     )}
                   </AnimatePresence>
 
+                  {/* Category selector — shown when not uploading */}
+                  {uploadProgress === null && (
+                    <div className="flex items-center justify-center gap-2 mb-3" onClick={e => e.stopPropagation()}>
+                      <Tag className="w-3.5 h-3.5 text-text-muted" />
+                      <select
+                        value={uploadCategory}
+                        onChange={e => setUploadCategory(e.target.value)}
+                        className="h-8 px-3 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400"
+                      >
+                        <option value="">No category (general)</option>
+                        {FILE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  )}
+
                   {uploadProgress !== null ? (
                     <div className="space-y-3">
                       <div className="w-12 h-12 rounded-2xl bg-primary-50 flex items-center justify-center mx-auto">
@@ -384,19 +403,37 @@ export default function PortalPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-text-primary truncate">{doc.filename}</p>
-                              <p className="text-[10px] text-text-muted">
-                                {sizeFmt} · Uploaded {new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <p className="text-[10px] text-text-muted">
+                                  {sizeFmt} · {new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </p>
+                                {doc.description && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 bg-primary-50 text-primary-600 rounded-full">
+                                    <Tag className="w-2.5 h-2.5" />{doc.description}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] text-success font-medium">
                               <Lock className="w-3 h-3" />Encrypted
                             </div>
-                            <button
-                              onClick={() => handleDownload(doc.file_path, doc.filename)}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-white rounded-lg"
-                              title="Download">
-                              <Download className="w-4 h-4 text-text-muted" />
-                            </button>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => handleDownload(doc.file_path, doc.filename)}
+                                className="p-1.5 hover:bg-white rounded-lg" title="Download">
+                                <Download className="w-4 h-4 text-text-muted" />
+                              </button>
+                              {/* Only allow deleting files the client uploaded (uploaded_by === null) */}
+                              {doc.uploaded_by === null && (
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm('Delete this file?')) return;
+                                    await deleteDocument(doc.id, doc.file_path);
+                                  }}
+                                  className="p-1.5 hover:bg-danger/10 rounded-lg" title="Delete">
+                                  <Trash2 className="w-4 h-4 text-danger" />
+                                </button>
+                              )}
+                            </div>
                           </motion.div>
                         );
                       })}

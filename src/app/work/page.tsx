@@ -7,7 +7,7 @@ import { useWorkItems, type WorkItemWithTasks } from '@/lib/hooks/use-work-items
 import {
   Search, Filter, Plus, MoreHorizontal, ChevronDown, ChevronRight, Pencil, Trash2,
   Calendar, Clock, CheckCircle2, X, AlertCircle, Loader2 as Loader,
-  Pause, Play, Eye, ArrowUpDown, Loader2, DollarSign
+  Pause, Play, Eye, ArrowUpDown, Loader2, DollarSign, Save
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { WorkItem } from '@/lib/types/database';
@@ -38,7 +38,7 @@ const typeConfig: Record<string, { label: string; color: string }> = {
   'onboarding': { label: 'Onboarding', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
 };
 
-/* â”€â”€â”€ New Work Item Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* â"€â"€â"€ New Work Item Modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Partial<WorkItem>) => Promise<void> }) {
   const { clients } = useClients();
   const { members } = useTeamMembers();
@@ -91,7 +91,7 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
             <select value={clientName} onChange={e => setClientName(e.target.value)}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
               <option value="">No client</option>
-              {clients.map(c => <option key={c.id} value={c.name}>{c.name}{c.company ? ` â€” ${c.company}` : ''}</option>)}
+              {clients.map(c => <option key={c.id} value={c.name}>{c.name}{c.company ? ` â€" ${c.company}` : ''}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -154,7 +154,7 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
             </div>
           </div>
           <div>
-            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Budget ($)</label>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Amount Charged to Client ($)</label>
             <div className="relative">
               <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
               <input type="number" placeholder="0.00" value={budget} onChange={e => setBudget(e.target.value)} min="0" step="0.01"
@@ -228,7 +228,7 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
             <select value={clientName} onChange={e => setClientName(e.target.value)}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
               <option value="">No client</option>
-              {clients.map(c => <option key={c.id} value={c.name}>{c.name}{c.company ? ` â€” ${c.company}` : ''}</option>)}
+              {clients.map(c => <option key={c.id} value={c.name}>{c.name}{c.company ? ` â€" ${c.company}` : ''}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -287,7 +287,7 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
             </div>
           </div>
           <div>
-            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Budget ($)</label>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Amount Charged to Client ($)</label>
             <div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
               <input type="number" value={budget} onChange={e => setBudget(e.target.value)} min="0" step="0.01"
                 className="w-full h-10 pl-8 pr-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" /></div>
@@ -339,18 +339,38 @@ function DeleteWorkItemModal({ item, onClose, onDelete }: { item: WorkItemWithTa
 
 
 export default function WorkPage() {
-  const { workItems, loading, updateTaskCompletion, addWorkItem, updateWorkItem, deleteWorkItem } = useWorkItems();
+  const { workItems, loading, updateTaskCompletion, addWorkItem, updateWorkItem, deleteWorkItem, addTask, deleteTask } = useWorkItems();
+  const { members } = useTeamMembers();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewItem, setShowNewItem] = useState(false);
   const [editItem, setEditItem] = useState<WorkItemWithTasks | null>(null);
   const [deleteItem, setDeleteItem] = useState<WorkItemWithTasks | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  // Inline add-task state per work item
+  const [addingTaskFor, setAddingTaskFor] = useState<string | null>(null);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskAssignee, setNewTaskAssignee] = useState('');
+  const [savingTask, setSavingTask] = useState(false);
 
   const filteredItems = workItems.filter(item =>
     item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     item.client_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  async function handleAddTask(workItemId: string) {
+    if (!newTaskTitle.trim() || savingTask) return;
+    setSavingTask(true);
+    try {
+      const m = members.find(x => x.name === newTaskAssignee);
+      await addTask(workItemId, newTaskTitle.trim(), newTaskAssignee || undefined, m?.id || undefined);
+      setNewTaskTitle('');
+      setNewTaskAssignee('');
+      setAddingTaskFor(null);
+    } finally {
+      setSavingTask(false);
+    }
+  }
 
   return (
     <AppShell title="Work" subtitle={`${workItems.length} active work items`}>
@@ -525,48 +545,64 @@ export default function WorkPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                           {/* Tasks */}
                           <div>
-                            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Tasks</h4>
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Tasks</h4>
+                              <button
+                                onClick={e => { e.stopPropagation(); setAddingTaskFor(addingTaskFor === item.id ? null : item.id); setNewTaskTitle(''); setNewTaskAssignee(''); }}
+                                className="flex items-center gap-1 text-[10px] font-semibold text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 px-2 py-1 rounded-lg transition-colors"
+                              >
+                                <Plus className="w-3 h-3" />Add Task
+                              </button>
+                            </div>
+                            <AnimatePresence>
+                              {addingTaskFor === item.id && (
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                                  className="mb-3 overflow-hidden">
+                                  <div className="flex gap-2 p-3 bg-primary-50/50 rounded-xl border border-primary-100" onClick={e => e.stopPropagation()}>
+                                    <input type="text" placeholder="Task title..."
+                                      value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') handleAddTask(item.id); }}
+                                      className="flex-1 h-8 px-3 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400" />
+                                    <select value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)}
+                                      className="h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400">
+                                      <option value="">Assignee</option>
+                                      {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                                    </select>
+                                    <button onClick={() => handleAddTask(item.id)} disabled={savingTask || !newTaskTitle.trim()}
+                                      className="h-8 px-3 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors flex items-center gap-1">
+                                      {savingTask ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Save className="w-3 h-3" />Add</>}
+                                    </button>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                             <div className="space-y-2">
+                              {item.tasks.length === 0 && addingTaskFor !== item.id && (
+                                <p className="text-xs text-text-muted text-center py-4 italic">No tasks yet — click Add Task to create one</p>
+                              )}
                               {item.tasks.map((task, ti) => (
-                                <motion.div
-                                  key={task.id}
-                                  initial={{ opacity: 0, x: -10 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ delay: ti * 0.05 }}
-                                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-hover transition-colors cursor-pointer"
-                                  onClick={() => updateTaskCompletion(task.id, item.id, !task.completed)}
-                                >
-                                  <div className={clsx(
-                                    'w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors',
-                                    task.completed
-                                      ? 'bg-success border-success'
-                                      : 'border-border hover:border-primary-400'
-                                  )}>
+                                <motion.div key={task.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ti * 0.05 }}
+                                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-hover transition-colors group/task">
+                                  <div className={clsx('w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer',
+                                    task.completed ? 'bg-success border-success' : 'border-border hover:border-primary-400')}
+                                    onClick={e => { e.stopPropagation(); updateTaskCompletion(task.id, item.id, !task.completed); }}>
                                     {task.completed && (
-                                      <motion.svg
-                                        initial={{ pathLength: 0 }}
-                                        animate={{ pathLength: 1 }}
-                                        className="w-3 h-3 text-white"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="3"
-                                      >
+                                      <motion.svg initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+                                        className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                                         <motion.path d="M20 6L9 17l-5-5" />
                                       </motion.svg>
                                     )}
                                   </div>
-                                  <span className={clsx(
-                                    'text-sm flex-1',
-                                    task.completed ? 'text-text-muted line-through' : 'text-text-primary'
-                                  )}>
+                                  <span className={clsx('text-sm flex-1', task.completed ? 'text-text-muted line-through' : 'text-text-primary')}>
                                     {task.title}
                                   </span>
                                   {task.assignee && (
-                                    <span className="text-[10px] text-text-muted bg-surface-hover px-2 py-0.5 rounded-full">
-                                      {task.assignee}
-                                    </span>
+                                    <span className="text-[10px] text-text-muted bg-surface-hover px-2 py-0.5 rounded-full">{task.assignee}</span>
                                   )}
+                                  <button onClick={e => { e.stopPropagation(); deleteTask(task.id); }}
+                                    className="opacity-0 group-hover/task:opacity-100 transition-opacity p-1 hover:bg-danger/10 rounded">
+                                    <Trash2 className="w-3 h-3 text-danger" />
+                                  </button>
                                 </motion.div>
                               ))}
                             </div>
@@ -577,20 +613,28 @@ export default function WorkPage() {
                             <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Details</h4>
                             <div className="space-y-3">
                               <div className="flex items-center justify-between py-2 border-b border-border-light">
-                                <span className="text-xs text-text-muted">Budget</span>
+                                <span className="text-xs text-text-muted">Amount Charged</span>
                                 <span className="text-sm font-semibold text-text-primary">${item.budget.toLocaleString()}</span>
                               </div>
                               <div className="flex items-center justify-between py-2 border-b border-border-light">
                                 <span className="text-xs text-text-muted">Time Spent</span>
                                 <span className="text-sm font-semibold text-text-primary">{item.time_spent}h</span>
                               </div>
+                              {item.budget > 0 && item.time_spent > 0 && (
+                                <div className="flex items-center justify-between py-2 border-b border-border-light">
+                                  <span className="text-xs text-text-muted">Effective $/hr</span>
+                                  <span className={clsx('text-sm font-bold', (item.budget / item.time_spent) >= 75 ? 'text-success' : 'text-warning')}>
+                                    ${(item.budget / item.time_spent).toFixed(2)}/hr
+                                  </span>
+                                </div>
+                              )}
                               <div className="flex items-center justify-between py-2 border-b border-border-light">
                                 <span className="text-xs text-text-muted">Start Date</span>
-                                <span className="text-sm text-text-primary">{item.start_date ? new Date(item.start_date).toLocaleDateString() : 'â€”'}</span>
+                                <span className="text-sm text-text-primary">{item.start_date ? new Date(item.start_date).toLocaleDateString() : '—'}</span>
                               </div>
                               <div className="flex items-center justify-between py-2 border-b border-border-light">
                                 <span className="text-xs text-text-muted">Due Date</span>
-                                <span className="text-sm font-semibold text-text-primary">{item.due_date ? new Date(item.due_date).toLocaleDateString() : 'â€”'}</span>
+                                <span className="text-sm font-semibold text-text-primary">{item.due_date ? new Date(item.due_date).toLocaleDateString() : '—'}</span>
                               </div>
                               <div className="flex items-center justify-between py-2">
                                 <span className="text-xs text-text-muted">Assignee</span>
@@ -598,7 +642,7 @@ export default function WorkPage() {
                                   <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-[8px] font-bold text-white">
                                     {item.assignee.split(' ').map(n => n[0]).join('')}
                                   </div>
-                                  <span className="text-sm text-text-primary">{item.assignee}</span>
+                                  <span className="text-sm text-text-primary">{item.assignee || '—'}</span>
                                 </div>
                               </div>
                             </div>

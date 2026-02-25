@@ -182,6 +182,7 @@ export interface Database {
         Row: {
           id: string;
           work_item_id: string | null;
+          task_id: string | null;
           client_id: string | null;
           user_id: string | null;
           description: string | null;

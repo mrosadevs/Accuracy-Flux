@@ -49,7 +49,7 @@ export function usePortal(clientId?: string) {
     return () => { supabase.removeChannel(channel); };
   }, [fetchData, supabase, configured, clientId]);
 
-  async function uploadDocument(file: File, cid: string) {
+  async function uploadDocument(file: File, cid: string, uploadedBy?: string | null, category?: string) {
     if (!configured) return null;
     const filePath = `${cid}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage
@@ -58,11 +58,27 @@ export function usePortal(clientId?: string) {
     if (uploadError) throw uploadError;
     const { data, error } = await supabase
       .from('portal_documents')
-      .insert({ client_id: cid, filename: file.name, file_path: filePath, file_size: file.size, mime_type: file.type, tags: [] })
+      .insert({
+        client_id: cid,
+        filename: file.name,
+        file_path: filePath,
+        file_size: file.size,
+        mime_type: file.type,
+        tags: category ? [category] : [],
+        uploaded_by: uploadedBy ?? null,
+        description: category ?? null,
+      })
       .select().single();
     if (error) throw error;
     await fetchData();
     return data;
+  }
+
+  async function deleteDocument(docId: string, filePath: string) {
+    if (!configured) return;
+    await supabase.storage.from('portal-documents').remove([filePath]);
+    await supabase.from('portal_documents').delete().eq('id', docId);
+    await fetchData();
   }
 
   async function getDownloadUrl(filePath: string) {
@@ -82,7 +98,7 @@ export function usePortal(clientId?: string) {
     return data;
   }
 
-  return { documents, messages, loading, uploadDocument, getDownloadUrl, sendMessage, refetch: fetchData };
+  return { documents, messages, loading, uploadDocument, deleteDocument, getDownloadUrl, sendMessage, refetch: fetchData };
 }
 
 // Hook to load the current portal user's linked client + their work items

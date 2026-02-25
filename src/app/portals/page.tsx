@@ -80,7 +80,7 @@ function ClientPanel({ client }: { client: Client }) {
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
-        await uploadDocument(file, client.id);
+        await uploadDocument(file, client.id, profile?.id ?? 'staff');
       }
     } finally { setUploading(false); }
   }, [uploadDocument, client.id]);

@@ -111,5 +111,32 @@ export function useWorkItems() {
     await fetchWorkItems();
   }
 
-  return { workItems, loading, updateTaskCompletion, addWorkItem, updateWorkItem, deleteWorkItem, refetch: fetchWorkItems };
+  async function addTask(workItemId: string, title: string, assignee?: string, assigneeId?: string, dueDate?: string) {
+    if (!configured) return null;
+    const workItem = workItems.find(w => w.id === workItemId);
+    const sortOrder = workItem ? workItem.tasks.length : 0;
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert({
+        work_item_id: workItemId,
+        title: title.trim(),
+        completed: false,
+        assignee: assignee ?? null,
+        assignee_id: assigneeId ?? null,
+        due_date: dueDate ?? null,
+        sort_order: sortOrder,
+      })
+      .select().single();
+    if (error) throw error;
+    await fetchWorkItems();
+    return data;
+  }
+
+  async function deleteTask(taskId: string) {
+    if (!configured) return;
+    await supabase.from("tasks").delete().eq("id", taskId);
+    await fetchWorkItems();
+  }
+
+  return { workItems, loading, updateTaskCompletion, addWorkItem, updateWorkItem, deleteWorkItem, addTask, deleteTask, refetch: fetchWorkItems };
 }

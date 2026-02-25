@@ -206,6 +206,22 @@ export function useTriage() {
     await fetchPortalNotifications();
   }
 
+  async function clearThread(threadId: string) {
+    if (!configured) return;
+    // Use server-side API route to bypass RLS restrictions
+    const res = await fetch('/api/delete-thread-messages', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error ?? 'Failed to clear thread');
+    }
+    await fetchMessages(threadId);
+    await fetchThreads();
+  }
+
   async function bumpThread(threadId: string) {
     if (!configured || !profile) return;
     const bumpMsg = `⚡ Bumped by ${profile.name} — this thread needs attention`;
@@ -239,7 +255,7 @@ export function useTriage() {
   return {
     threads, messages, portalNotifications, loading,
     selectedThreadId, setSelectedThreadId, selectThread,
-    createThread, sendMessage, deleteThread, renameThread, markPortalRead, bumpPortalMessage, bumpThread,
+    createThread, sendMessage, deleteThread, renameThread, clearThread, markPortalRead, bumpPortalMessage, bumpThread,
     unreadPortalCount,
     refetchThreads: fetchThreads,
   };
