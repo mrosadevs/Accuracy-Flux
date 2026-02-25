@@ -27,6 +27,7 @@ export interface ActiveTimer {
   clientName: string;
   workItemId: string | null;
   workItemTitle: string;
+  businessName: string;
   taskId: string | null;
   taskName: string;
   startedAt: number;

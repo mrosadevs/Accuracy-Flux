@@ -44,6 +44,7 @@ export function useClients() {
         type: input.type ?? 'individual',
         assigned_to: input.assigned_to ?? '',
         tags: input.tags ?? [],
+        businesses: input.businesses ?? [],
         total_billed: 0,
         outstanding_balance: 0,
         last_activity: new Date().toISOString(),

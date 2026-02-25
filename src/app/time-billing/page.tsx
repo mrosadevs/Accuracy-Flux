@@ -9,7 +9,7 @@ import { useClients } from '@/lib/hooks/use-clients';
 import { useWorkItems } from '@/lib/hooks/use-work-items';
 import {
   Play, Square, Clock, TrendingUp, AlertCircle,
-  Plus, FileText, MoreHorizontal, X, Save, Loader2, CheckCircle, Trash2, Link2, ListChecks
+  Plus, FileText, MoreHorizontal, X, Save, Loader2, CheckCircle, Trash2, Link2, ListChecks, Briefcase
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -188,7 +188,8 @@ function StartTimerModal({ onClose, onStart }: {
   onClose: () => void;
   onStart: (data: {
     description: string; clientId: string | null; clientName: string;
-    workItemId: string | null; workItemTitle: string; taskId: string | null; taskName: string; billable: boolean;
+    workItemId: string | null; workItemTitle: string; businessName: string;
+    taskId: string | null; taskName: string; billable: boolean;
   }) => void;
 }) {
   const { clients }   = useClients();
@@ -208,6 +209,9 @@ function StartTimerModal({ onClose, onStart }: {
   const availableTasks = workItemId
     ? (workItems.find(w => w.id === workItemId)?.tasks ?? [])
     : [];
+
+  const selectedWorkItem = workItems.find(w => w.id === workItemId) ?? null;
+  const workItemBusiness = selectedWorkItem?.business_name ?? '';
 
   function handleWorkItemChange(wid: string) {
     setWorkItemId(wid);
@@ -237,7 +241,6 @@ function StartTimerModal({ onClose, onStart }: {
   function handleStart() {
     if (!description.trim()) { setError('Enter a description for the task.'); return; }
     const selectedClient = clients.find(c => c.id === clientId);
-    const selectedWorkItem = workItems.find(w => w.id === workItemId);
     const selectedTask = availableTasks.find(t => t.id === taskId);
     onStart({
       description: description.trim(),
@@ -245,6 +248,7 @@ function StartTimerModal({ onClose, onStart }: {
       clientName: selectedClient?.name ?? '',
       workItemId: workItemId || null,
       workItemTitle: selectedWorkItem?.title ?? '',
+      businessName: workItemBusiness,
       taskId: taskId || null,
       taskName: selectedTask?.title ?? '',
       billable,
@@ -282,10 +286,19 @@ function StartTimerModal({ onClose, onStart }: {
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
               <option value="">None</option>
               {filteredWorkItems.map(w => (
-                <option key={w.id} value={w.id}>{w.title}{w.client_name ? ` (${w.client_name})` : ''}</option>
+                <option key={w.id} value={w.id}>{w.title}{w.client_name ? ` (${w.client_name}${w.business_name ? ' · ' + w.business_name : ''})` : ''}</option>
               ))}
             </select>
           </div>
+
+          {/* Show business badge when work item has one */}
+          {workItemBusiness && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
+              <div className="flex items-center gap-1.5 px-3 py-2 bg-accent-50 border border-accent-200 rounded-xl text-xs text-accent-700 font-medium">
+                <Briefcase className="w-3 h-3" />Business: {workItemBusiness}
+              </div>
+            </motion.div>
+          )}
 
           {workItemId && availableTasks.length > 0 && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
@@ -398,9 +411,14 @@ export default function TimeBillingPage() {
                   <div>
                     <p className="text-sm opacity-80 font-medium">Currently tracking</p>
                     <p className="text-lg font-bold">{activeTimer.description}{activeTimer.clientName ? ` — ${activeTimer.clientName}` : ''}</p>
-                    <p className="text-xs opacity-70 mt-0.5">
-                      {activeTimer.billable ? 'Billable' : 'Non-billable'}
-                      {activeTimer.taskName ? ` · Task: ${activeTimer.taskName}` : activeTimer.workItemTitle ? ` · ${activeTimer.workItemTitle}` : ''}
+                    <p className="text-xs opacity-70 mt-0.5 flex items-center gap-1 flex-wrap">
+                      <span>{activeTimer.billable ? 'Billable' : 'Non-billable'}</span>
+                      {activeTimer.businessName && (
+                        <span className="flex items-center gap-0.5 bg-white/20 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">
+                          <Briefcase className="w-2.5 h-2.5" />{activeTimer.businessName}
+                        </span>
+                      )}
+                      {activeTimer.taskName ? <span>· Task: {activeTimer.taskName}</span> : activeTimer.workItemTitle ? <span>· {activeTimer.workItemTitle}</span> : null}
                     </p>
                   </div>
                 </div>

@@ -81,6 +81,7 @@ export function useWorkItems() {
         title: input.title ?? "",
         client_id: input.client_id ?? null,
         client_name: input.client_name ?? "",
+        business_name: input.business_name ?? null,
         type: input.type ?? "tax-return",
         status: input.status ?? "not-started",
         priority: input.priority ?? "medium",

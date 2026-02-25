@@ -34,6 +34,7 @@ export interface Database {
           assigned_to_id: string | null;
           assigned_to: string;
           tags: string[];
+          businesses: string[];
           total_billed: number;
           outstanding_balance: number;
           last_activity: string;
@@ -49,6 +50,7 @@ export interface Database {
           title: string;
           client_id: string | null;
           client_name: string;
+          business_name: string | null;
           type: 'tax-return' | 'bookkeeping' | 'payroll' | 'advisory' | 'audit' | 'onboarding';
           status: 'not-started' | 'in-progress' | 'waiting-on-client' | 'in-review' | 'completed';
           priority: 'low' | 'medium' | 'high' | 'urgent';

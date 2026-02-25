@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, MoreHorizontal, Mail, Phone, Building2, Pencil, Trash2,
   LayoutGrid, List, Send, X, FileText, Receipt, CheckCircle,
-  Calendar, DollarSign, AlertCircle, Loader2, UserPlus, Lock
+  Calendar, DollarSign, AlertCircle, Loader2, UserPlus, Lock, Briefcase
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useClients } from '@/lib/hooks/use-clients';
@@ -147,16 +147,23 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
   const [type, setType] = useState<'individual' | 'business'>('individual');
   const [status, setStatus] = useState<'active' | 'onboarding' | 'inactive'>('onboarding');
   const [assignedTo, setAssignedTo] = useState('');
+  const [businesses, setBusinesses] = useState<string[]>([]);
+  const [bizInput, setBizInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const { members } = useTeamMembers();
+
+  function addBusiness() {
+    const v = bizInput.trim();
+    if (v && !businesses.includes(v)) { setBusinesses(prev => [...prev, v]); setBizInput(''); }
+  }
 
   async function handleSave() {
     if (!name.trim()) { setError('Client name is required.'); return; }
     if (!email.trim()) { setError('Email is required.'); return; }
     setSaving(true); setError('');
     try {
-      await onSave({ name: name.trim(), company: company.trim(), email: email.trim(), phone: phone.trim(), type, status, assigned_to: assignedTo.trim() });
+      await onSave({ name: name.trim(), company: company.trim(), email: email.trim(), phone: phone.trim(), type, status, assigned_to: assignedTo.trim(), businesses });
       onClose();
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed to create client'); }
     finally { setSaving(false); }
@@ -167,8 +174,8 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       onClick={e => e.target === e.currentTarget && onClose()}>
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-border">
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border sticky top-0 bg-white z-10">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center">
               <UserPlus className="w-4 h-4 text-white" />
@@ -226,6 +233,37 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
               </select>
             </div>
           </div>
+
+          {/* Multi-business section */}
+          <div className="rounded-xl border border-border p-4 space-y-3 bg-surface-hover/30">
+            <div className="flex items-center gap-2">
+              <Briefcase className="w-3.5 h-3.5 text-accent-600" />
+              <span className="text-xs font-semibold text-text-secondary">Business Entities</span>
+              <span className="text-[10px] text-text-muted">(for clients with multiple businesses)</span>
+            </div>
+            <div className="flex gap-2">
+              <input type="text" placeholder="e.g. Smith LLC, Smith Rentals…" value={bizInput}
+                onChange={e => setBizInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addBusiness(); } }}
+                className="flex-1 h-9 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-400 transition-all placeholder:text-text-muted" />
+              <button type="button" onClick={addBusiness}
+                className="h-9 px-3 rounded-xl text-xs font-semibold bg-accent-50 text-accent-700 hover:bg-accent-100 border border-accent-200 transition-colors">Add</button>
+            </div>
+            {businesses.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {businesses.map((biz, i) => (
+                  <span key={i} className="flex items-center gap-1 px-2.5 py-1 bg-accent-50 text-accent-700 rounded-full text-xs font-medium border border-accent-200">
+                    <Briefcase className="w-3 h-3" />{biz}
+                    <button type="button" onClick={() => setBusinesses(prev => prev.filter((_, j) => j !== i))}
+                      className="ml-0.5 hover:text-danger transition-colors"><X className="w-2.5 h-2.5" /></button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] text-text-muted">Leave empty for a single-entity client.</p>
+            )}
+          </div>
+
           <div className="flex gap-3 pt-1">
             <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
             <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
@@ -329,15 +367,22 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
   const [phone, setPhone] = useState(client.phone ?? "");
   const [status, setStatus] = useState<Client["status"]>(client.status);
   const [assignedTo, setAssignedTo] = useState(client.assigned_to ?? "");
+  const [businesses, setBusinesses] = useState<string[]>(client.businesses ?? []);
+  const [bizInput, setBizInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const { members } = useTeamMembers();
+
+  function addBusiness() {
+    const v = bizInput.trim();
+    if (v && !businesses.includes(v)) { setBusinesses(prev => [...prev, v]); setBizInput(''); }
+  }
 
   async function handleSave() {
     if (!name.trim()) { setError("Client name is required."); return; }
     setSaving(true); setError("");
     try {
-      await onSave(client.id, { name: name.trim(), company: company.trim(), email: email.trim(), phone: phone.trim(), status, assigned_to: assignedTo.trim() });
+      await onSave(client.id, { name: name.trim(), company: company.trim(), email: email.trim(), phone: phone.trim(), status, assigned_to: assignedTo.trim(), businesses });
       onClose();
     } catch (err: unknown) { setError(err instanceof Error ? err.message : "Failed to update client"); }
     finally { setSaving(false); }
@@ -348,8 +393,8 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       onClick={e => e.target === e.currentTarget && onClose()}>
       <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-border">
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border sticky top-0 bg-white z-10">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
               <Pencil className="w-4 h-4 text-white" />
@@ -399,6 +444,37 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
               </select>
             </div>
           </div>
+
+          {/* Multi-business section */}
+          <div className="rounded-xl border border-border p-4 space-y-3 bg-surface-hover/30">
+            <div className="flex items-center gap-2">
+              <Briefcase className="w-3.5 h-3.5 text-accent-600" />
+              <span className="text-xs font-semibold text-text-secondary">Business Entities</span>
+              <span className="text-[10px] text-text-muted">(for clients with multiple businesses)</span>
+            </div>
+            <div className="flex gap-2">
+              <input type="text" placeholder="e.g. Smith LLC, Smith Rentals…" value={bizInput}
+                onChange={e => setBizInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addBusiness(); } }}
+                className="flex-1 h-9 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-400 transition-all placeholder:text-text-muted" />
+              <button type="button" onClick={addBusiness}
+                className="h-9 px-3 rounded-xl text-xs font-semibold bg-accent-50 text-accent-700 hover:bg-accent-100 border border-accent-200 transition-colors">Add</button>
+            </div>
+            {businesses.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {businesses.map((biz, i) => (
+                  <span key={i} className="flex items-center gap-1 px-2.5 py-1 bg-accent-50 text-accent-700 rounded-full text-xs font-medium border border-accent-200">
+                    <Briefcase className="w-3 h-3" />{biz}
+                    <button type="button" onClick={() => setBusinesses(prev => prev.filter((_, j) => j !== i))}
+                      className="ml-0.5 hover:text-danger transition-colors"><X className="w-2.5 h-2.5" /></button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] text-text-muted">Leave empty for a single-entity client.</p>
+            )}
+          </div>
+
           <div className="flex gap-3 pt-1">
             <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-text-secondary hover:bg-surface-hover transition-colors">Cancel</button>
             <motion.button onClick={handleSave} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
@@ -550,6 +626,15 @@ export default function ClientsPage() {
                   <div className="flex items-center gap-2 text-xs text-text-secondary"><Mail className="w-3.5 h-3.5 text-text-muted" />{client.email}</div>
                   {client.phone && <div className="flex items-center gap-2 text-xs text-text-secondary"><Phone className="w-3.5 h-3.5 text-text-muted" />{client.phone}</div>}
                 </div>
+                {client.businesses?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {client.businesses.map(biz => (
+                      <span key={biz} className="flex items-center gap-0.5 text-[9px] font-semibold px-2 py-0.5 rounded-full bg-accent-50 text-accent-700 border border-accent-100">
+                        <Briefcase className="w-2.5 h-2.5" />{biz}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {client.tags?.length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-4">
                     {client.tags.map(tag => (

@@ -1,13 +1,13 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkItems, type WorkItemWithTasks } from '@/lib/hooks/use-work-items';
 import {
   Search, Filter, Plus, MoreHorizontal, ChevronDown, ChevronRight, Pencil, Trash2,
   Calendar, Clock, CheckCircle2, X, AlertCircle, Loader2 as Loader,
-  Pause, Play, Eye, ArrowUpDown, Loader2, DollarSign, Save
+  Pause, Play, Eye, ArrowUpDown, Loader2, DollarSign, Save, Briefcase
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { WorkItem } from '@/lib/types/database';
@@ -38,12 +38,12 @@ const typeConfig: Record<string, { label: string; color: string }> = {
   'onboarding': { label: 'Onboarding', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
 };
 
-/* â"€â"€â"€ New Work Item Modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Partial<WorkItem>) => Promise<void> }) {
   const { clients } = useClients();
   const { members } = useTeamMembers();
   const [title, setTitle] = useState('');
-  const [clientName, setClientName] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [businessName, setBusinessName] = useState('');
   const [type, setType] = useState<WorkItem['type']>('tax-return');
   const [priority, setPriority] = useState<WorkItem['priority']>('medium');
   const [status, setStatus] = useState<WorkItem['status']>('not-started');
@@ -54,11 +54,29 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const selectedClient = clients.find(c => c.id === clientId) ?? null;
+  const clientBusinesses: string[] = selectedClient?.businesses ?? [];
+
+  function handleClientChange(cid: string) {
+    setClientId(cid);
+    setBusinessName('');
+  }
+
   async function handleSave() {
     if (!title.trim()) { setError('Title is required.'); return; }
     setSaving(true); setError('');
     try {
-      await onSave({ title: title.trim(), client_name: clientName.trim(), type, priority, status, assignee: assignee.trim(), due_date: dueDate || null, start_date: startDate || null, budget: parseFloat(budget) || 0 });
+      await onSave({
+        title: title.trim(),
+        client_id: clientId || null,
+        client_name: selectedClient?.name ?? '',
+        business_name: businessName || null,
+        type, priority, status,
+        assignee: assignee.trim(),
+        due_date: dueDate || null,
+        start_date: startDate || null,
+        budget: parseFloat(budget) || 0,
+      });
       onClose();
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed to create work item'); }
     finally { setSaving(false); }
@@ -88,12 +106,26 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
           </div>
           <div>
             <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client</label>
-            <select value={clientName} onChange={e => setClientName(e.target.value)}
+            <select value={clientId} onChange={e => handleClientChange(e.target.value)}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
               <option value="">No client</option>
-              {clients.map(c => <option key={c.id} value={c.name}>{c.name}{c.company ? ` â€" ${c.company}` : ''}</option>)}
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.company ? ` – ${c.company}` : ''}</option>)}
             </select>
           </div>
+          <AnimatePresence>
+            {clientBusinesses.length > 0 && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                <label className="text-xs font-semibold text-text-secondary mb-1.5 flex items-center gap-1.5">
+                  <Briefcase className="w-3 h-3 text-accent-600" />Business Entity
+                </label>
+                <select value={businessName} onChange={e => setBusinessName(e.target.value)}
+                  className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-accent-200 focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-400 transition-all">
+                  <option value="">General (all businesses)</option>
+                  {clientBusinesses.map(biz => <option key={biz} value={biz}>{biz}</option>)}
+                </select>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Type</label>
@@ -175,12 +207,12 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
 }
 
 
-/* ─── Edit Work Item Modal ──────────────────────────────────────── */
 function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks; onClose: () => void; onSave: (id: string, updates: Partial<WorkItem>) => Promise<void> }) {
   const { clients } = useClients();
   const { members } = useTeamMembers();
   const [title, setTitle] = useState(item.title);
-  const [clientName, setClientName] = useState(item.client_name);
+  const [clientId, setClientId] = useState(item.client_id ?? '');
+  const [businessName, setBusinessName] = useState(item.business_name ?? '');
   const [type, setType] = useState<WorkItem['type']>(item.type);
   const [priority, setPriority] = useState<WorkItem['priority']>(item.priority);
   const [status, setStatus] = useState<WorkItem['status']>(item.status);
@@ -191,11 +223,40 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // If client_id was not stored, try to look it up by name once clients load
+  const didInit = useRef(false);
+  useEffect(() => {
+    if (didInit.current || !clients.length) return;
+    if (!item.client_id && item.client_name) {
+      const found = clients.find(c => c.name === item.client_name);
+      if (found) setClientId(found.id);
+    }
+    didInit.current = true;
+  }, [clients, item.client_id, item.client_name]);
+
+  const selectedClient = clients.find(c => c.id === clientId) ?? null;
+  const clientBusinesses: string[] = selectedClient?.businesses ?? [];
+
+  function handleClientChange(cid: string) {
+    setClientId(cid);
+    setBusinessName('');
+  }
+
   async function handleSave() {
     if (!title.trim()) { setError('Title is required.'); return; }
     setSaving(true); setError('');
     try {
-      await onSave(item.id, { title: title.trim(), client_name: clientName.trim(), type, priority, status, assignee: assignee.trim(), due_date: dueDate || null, start_date: startDate || null, budget: parseFloat(budget) || 0 });
+      await onSave(item.id, {
+        title: title.trim(),
+        client_id: clientId || null,
+        client_name: selectedClient?.name ?? item.client_name,
+        business_name: businessName || null,
+        type, priority, status,
+        assignee: assignee.trim(),
+        due_date: dueDate || null,
+        start_date: startDate || null,
+        budget: parseFloat(budget) || 0,
+      });
       onClose();
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed to update work item'); }
     finally { setSaving(false); }
@@ -225,12 +286,26 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
           </div>
           <div>
             <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Client</label>
-            <select value={clientName} onChange={e => setClientName(e.target.value)}
+            <select value={clientId} onChange={e => handleClientChange(e.target.value)}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
               <option value="">No client</option>
-              {clients.map(c => <option key={c.id} value={c.name}>{c.name}{c.company ? ` â€" ${c.company}` : ''}</option>)}
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.company ? ` – ${c.company}` : ''}</option>)}
             </select>
           </div>
+          <AnimatePresence>
+            {clientBusinesses.length > 0 && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                <label className="text-xs font-semibold text-text-secondary mb-1.5 flex items-center gap-1.5">
+                  <Briefcase className="w-3 h-3 text-accent-600" />Business Entity
+                </label>
+                <select value={businessName} onChange={e => setBusinessName(e.target.value)}
+                  className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-accent-200 focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-400 transition-all">
+                  <option value="">General (all businesses)</option>
+                  {clientBusinesses.map(biz => <option key={biz} value={biz}>{biz}</option>)}
+                </select>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Type</label>
@@ -304,6 +379,7 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
     </motion.div>
   );
 }
+
 
 /* ─── Delete Work Item Modal ────────────────────────────────────────── */
 function DeleteWorkItemModal({ item, onClose, onDelete }: { item: WorkItemWithTasks; onClose: () => void; onDelete: (id: string) => Promise<void> }) {
@@ -487,8 +563,13 @@ export default function WorkPage() {
                         {type.label}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs text-text-muted">{item.client_name}</span>
+                      {item.business_name && (
+                        <span className="flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-accent-50 text-accent-700 border border-accent-100">
+                          <Briefcase className="w-2.5 h-2.5" />{item.business_name}
+                        </span>
+                      )}
                       <span className="text-xs text-text-muted">&middot;</span>
                       <span className="text-xs text-text-muted">{completedTasks}/{item.tasks.length} tasks</span>
                     </div>
