@@ -40,14 +40,12 @@ const typeConfig: Record<string, { label: string; color: string }> = {
 
 function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Partial<WorkItem>) => Promise<void> }) {
   const { clients } = useClients();
-  const { members } = useTeamMembers();
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [type, setType] = useState<WorkItem['type']>('tax-return');
   const [priority, setPriority] = useState<WorkItem['priority']>('medium');
   const [status, setStatus] = useState<WorkItem['status']>('not-started');
-  const [assignee, setAssignee] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [startDate, setStartDate] = useState('');
   const [budget, setBudget] = useState('');
@@ -72,7 +70,6 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
         client_name: selectedClient?.name ?? '',
         business_name: businessName || null,
         type, priority, status,
-        assignee: assignee.trim(),
         due_date: dueDate || null,
         start_date: startDate || null,
         budget: parseFloat(budget) || 0,
@@ -109,7 +106,7 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
             <select value={clientId} onChange={e => handleClientChange(e.target.value)}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
               <option value="">No client</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.company ? ` – ${c.company}` : ''}</option>)}
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <AnimatePresence>
@@ -149,7 +146,7 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
                 <option value="urgent">Urgent</option>
               </select>
             </div>
-            <div>
+            <div className="col-span-2">
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Status</label>
               <select value={status} onChange={e => setStatus(e.target.value as WorkItem['status'])}
                 className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
@@ -158,14 +155,6 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
                 <option value="waiting-on-client">Waiting on Client</option>
                 <option value="in-review">In Review</option>
                 <option value="completed">Completed</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assignee</label>
-              <select value={assignee} onChange={e => setAssignee(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
-                <option value="">Unassigned</option>
-                {members.map(m => <option key={m.id} value={m.name}>{m.name} ({m.role})</option>)}
               </select>
             </div>
             <div>
@@ -209,14 +198,12 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
 
 function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks; onClose: () => void; onSave: (id: string, updates: Partial<WorkItem>) => Promise<void> }) {
   const { clients } = useClients();
-  const { members } = useTeamMembers();
   const [title, setTitle] = useState(item.title);
   const [clientId, setClientId] = useState(item.client_id ?? '');
   const [businessName, setBusinessName] = useState(item.business_name ?? '');
   const [type, setType] = useState<WorkItem['type']>(item.type);
   const [priority, setPriority] = useState<WorkItem['priority']>(item.priority);
   const [status, setStatus] = useState<WorkItem['status']>(item.status);
-  const [assignee, setAssignee] = useState(item.assignee);
   const [dueDate, setDueDate] = useState(item.due_date ?? '');
   const [startDate, setStartDate] = useState(item.start_date ?? '');
   const [budget, setBudget] = useState(String(item.budget));
@@ -252,7 +239,6 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
         client_name: selectedClient?.name ?? item.client_name,
         business_name: businessName || null,
         type, priority, status,
-        assignee: assignee.trim(),
         due_date: dueDate || null,
         start_date: startDate || null,
         budget: parseFloat(budget) || 0,
@@ -289,7 +275,7 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
             <select value={clientId} onChange={e => handleClientChange(e.target.value)}
               className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
               <option value="">No client</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.company ? ` – ${c.company}` : ''}</option>)}
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <AnimatePresence>
@@ -329,7 +315,7 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
                 <option value="urgent">Urgent</option>
               </select>
             </div>
-            <div>
+            <div className="col-span-2">
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Status</label>
               <select value={status} onChange={e => setStatus(e.target.value as WorkItem['status'])}
                 className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
@@ -338,14 +324,6 @@ function EditWorkItemModal({ item, onClose, onSave }: { item: WorkItemWithTasks;
                 <option value="waiting-on-client">Waiting on Client</option>
                 <option value="in-review">In Review</option>
                 <option value="completed">Completed</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assignee</label>
-              <select value={assignee} onChange={e => setAssignee(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
-                <option value="">Unassigned</option>
-                {members.map(m => <option key={m.id} value={m.name}>{m.name} ({m.role})</option>)}
               </select>
             </div>
             <div>

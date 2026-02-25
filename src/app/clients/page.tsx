@@ -4,13 +4,12 @@ import { useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Plus, MoreHorizontal, Mail, Phone, Building2, Pencil, Trash2,
+  Search, Plus, Mail, Phone, Pencil, Trash2,
   LayoutGrid, List, Send, X, FileText, Receipt, CheckCircle,
   Calendar, DollarSign, AlertCircle, Loader2, UserPlus, Lock, Briefcase
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useClients } from '@/lib/hooks/use-clients';
-import { useTeamMembers } from '@/lib/hooks/use-profile';
 import { useInvoices } from '@/lib/hooks/use-invoices';
 import type { Client } from '@/lib/types/database';
 
@@ -69,7 +68,7 @@ function InvoiceModal({ client, onClose }: { client: Client; onClose: () => void
             </div>
             <div>
               <h2 className="text-sm font-bold text-text-primary">Send Invoice</h2>
-              <p className="text-xs text-text-muted">{client.name}{client.company ? ` · ${client.company}` : ''}</p>
+              <p className="text-xs text-text-muted">{client.name}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors"><X className="w-4 h-4 text-text-muted" /></button>
@@ -141,17 +140,14 @@ function InvoiceModal({ client, onClose }: { client: Client; onClose: () => void
 /* ─── New Client Modal ──────────────────────────────────────────────── */
 function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (data: Partial<Client>) => Promise<void> }) {
   const [name, setName] = useState('');
-  const [company, setCompany] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [type, setType] = useState<'individual' | 'business'>('individual');
   const [status, setStatus] = useState<'active' | 'onboarding' | 'inactive'>('onboarding');
-  const [assignedTo, setAssignedTo] = useState('');
   const [businesses, setBusinesses] = useState<string[]>([]);
   const [bizInput, setBizInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const { members } = useTeamMembers();
 
   function addBusiness() {
     const v = bizInput.trim();
@@ -163,7 +159,7 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
     if (!email.trim()) { setError('Email is required.'); return; }
     setSaving(true); setError('');
     try {
-      await onSave({ name: name.trim(), company: company.trim(), email: email.trim(), phone: phone.trim(), type, status, assigned_to: assignedTo.trim(), businesses });
+      await onSave({ name: name.trim(), email: email.trim(), phone: phone.trim(), type, status, businesses });
       onClose();
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed to create client'); }
     finally { setSaving(false); }
@@ -192,11 +188,6 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
               <input type="text" placeholder="Jane Smith" value={name} onChange={e => setName(e.target.value)}
                 className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
             </div>
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Company</label>
-              <input type="text" placeholder="Acme Corp" value={company} onChange={e => setCompany(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted" />
-            </div>
             <div>
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Email *</label>
               <input type="email" placeholder="jane@example.com" value={email} onChange={e => setEmail(e.target.value)}
@@ -222,14 +213,6 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
                 <option value="onboarding">Onboarding</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assigned To</label>
-              <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
-                <option value="">Unassigned</option>
-                {members.map(m => <option key={m.id} value={m.name}>{m.name} ({m.role})</option>)}
               </select>
             </div>
           </div>
@@ -362,16 +345,13 @@ function InvitePortalModal({ client, onClose }: { client: Client; onClose: () =>
 /* ─── Edit Client Modal ────────────────────────────────────────── */
 function EditClientModal({ client, onClose, onSave }: { client: Client; onClose: () => void; onSave: (id: string, data: Partial<Client>) => Promise<void> }) {
   const [name, setName] = useState(client.name);
-  const [company, setCompany] = useState(client.company ?? "");
   const [email, setEmail] = useState(client.email);
   const [phone, setPhone] = useState(client.phone ?? "");
   const [status, setStatus] = useState<Client["status"]>(client.status);
-  const [assignedTo, setAssignedTo] = useState(client.assigned_to ?? "");
   const [businesses, setBusinesses] = useState<string[]>(client.businesses ?? []);
   const [bizInput, setBizInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const { members } = useTeamMembers();
 
   function addBusiness() {
     const v = bizInput.trim();
@@ -382,7 +362,7 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
     if (!name.trim()) { setError("Client name is required."); return; }
     setSaving(true); setError("");
     try {
-      await onSave(client.id, { name: name.trim(), company: company.trim(), email: email.trim(), phone: phone.trim(), status, assigned_to: assignedTo.trim(), businesses });
+      await onSave(client.id, { name: name.trim(), email: email.trim(), phone: phone.trim(), status, businesses });
       onClose();
     } catch (err: unknown) { setError(err instanceof Error ? err.message : "Failed to update client"); }
     finally { setSaving(false); }
@@ -411,11 +391,6 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
               <input type="text" value={name} onChange={e => setName(e.target.value)}
                 className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
             </div>
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Company</label>
-              <input type="text" value={company} onChange={e => setCompany(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
-            </div>
             <div>
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Email *</label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)}
@@ -426,21 +401,13 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
               <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
                 className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all" />
             </div>
-            <div>
+            <div className="col-span-2">
               <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Status</label>
               <select value={status} onChange={e => setStatus(e.target.value as Client["status"])}
                 className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
                 <option value="active">Active</option>
                 <option value="onboarding">Onboarding</option>
                 <option value="inactive">Inactive</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assigned To</label>
-              <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
-                <option value="">Unassigned</option>
-                {members.map(m => <option key={m.id} value={m.name}>{m.name} ({m.role})</option>)}
               </select>
             </div>
           </div>
@@ -542,7 +509,6 @@ export default function ClientsPage() {
   const filteredClients = clients.filter(c => {
     const matchesSearch =
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = selectedStatus === 'all' || c.status === selectedStatus;
     return matchesSearch && matchesStatus;
@@ -614,7 +580,6 @@ export default function ClientsPage() {
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold text-text-primary">{client.name}</h3>
-                      {client.company && <p className="text-xs text-text-muted flex items-center gap-1 mt-0.5"><Building2 className="w-3 h-3" />{client.company}</p>}
                     </div>
                   </div>
                   <div className={clsx('flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border', statusColors[client.status])}>
@@ -653,12 +618,6 @@ export default function ClientsPage() {
                       <p className="text-sm font-bold text-danger">${client.outstanding_balance.toLocaleString()}</p>
                     </div>
                   )}
-                  {client.assigned_to && (
-                    <div className="text-right">
-                      <p className="text-[10px] text-text-muted">Assigned</p>
-                      <p className="text-xs font-medium text-text-primary">{client.assigned_to}</p>
-                    </div>
-                  )}
                 </div>
                 {/* Hover actions */}
                 <div className="absolute bottom-0 left-0 right-0 p-3 flex gap-2 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-200 bg-gradient-to-t from-card via-card/95 to-transparent rounded-b-2xl">
@@ -682,21 +641,20 @@ export default function ClientsPage() {
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-border overflow-hidden">
-            <div className="grid grid-cols-[2fr,1.5fr,1fr,1fr,1fr,auto] gap-4 px-5 py-3 bg-surface-hover/50 border-b border-border">
-              {['Client', 'Contact', 'Status', 'Billed', 'Assigned To', ''].map(h => (
+            <div className="grid grid-cols-[2fr,1.5fr,1fr,1fr,auto] gap-4 px-5 py-3 bg-surface-hover/50 border-b border-border">
+              {['Client', 'Contact', 'Status', 'Billed', ''].map(h => (
                 <span key={h} className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{h}</span>
               ))}
             </div>
             {filteredClients.map((client, i) => (
               <motion.div key={client.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
-                className="grid grid-cols-[2fr,1.5fr,1fr,1fr,1fr,auto] gap-4 px-5 py-3.5 border-b border-border-light hover:bg-surface-hover/50 transition-colors items-center group">
+                className="grid grid-cols-[2fr,1.5fr,1fr,1fr,auto] gap-4 px-5 py-3.5 border-b border-border-light hover:bg-surface-hover/50 transition-colors items-center group">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                     {client.name.split(' ').map(n => n[0]).join('')}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-text-primary">{client.name}</p>
-                    {client.company && <p className="text-xs text-text-muted">{client.company}</p>}
                   </div>
                 </div>
                 <div>
@@ -707,7 +665,6 @@ export default function ClientsPage() {
                   <div className={clsx('w-1.5 h-1.5 rounded-full', statusDots[client.status])} />{client.status}
                 </span>
                 <p className="text-sm font-semibold text-text-primary">${client.total_billed.toLocaleString()}</p>
-                <p className="text-xs text-text-secondary">{client.assigned_to}</p>
                 <div className="flex items-center gap-1">
                   <motion.button onClick={() => setInvoiceClient(client)} whileHover={{ scale: 1.05 }}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-primary-600 hover:bg-primary-50 transition-colors opacity-0 group-hover:opacity-100">
