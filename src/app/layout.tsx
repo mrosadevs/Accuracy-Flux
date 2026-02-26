@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/lib/theme-context";
 import "./globals.css";
@@ -8,6 +8,16 @@ const inter = Inter({
   subsets: ["latin"],
   display: "swap",
 });
+
+// Viewport config — viewport-fit=cover lets content extend under iPhone notch/Dynamic Island,
+// then we use CSS env(safe-area-inset-*) to pad content back into the safe zone.
+// maximumScale=1 prevents iOS from auto-zooming on input focus.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+};
 
 // TODO: Update metadataBase with your live domain
 export const metadata: Metadata = {

@@ -38,7 +38,7 @@ export default function PortalPage() {
   const supabase = useSupabase();
   const router   = useRouter();
   const { theme, toggleTheme } = useTheme();
-  const { client, workItems, authLoading, userRole } = usePortalClient();
+  const { client, workItems, authLoading, userRole, toggleTask } = usePortalClient();
 
   useEffect(() => {
     if (!authLoading && !client && userRole && userRole !== 'client') {
@@ -56,6 +56,9 @@ export default function PortalPage() {
   const [messageText,     setMessageText]     = useState('');
   const [sending,         setSending]         = useState(false);
   const [signingOut,      setSigningOut]      = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleting,        setDeleting]        = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState<string | null>(null);
 
   // Unread message tracking via localStorage
   const [lastReadCount, setLastReadCount] = useState(0);
@@ -78,9 +81,19 @@ export default function PortalPage() {
 
   const FILE_CATEGORIES = ['Bank Statement', 'Tax Document', 'Invoice', 'Receipt', 'Payroll', 'Other'];
 
-  const pendingCount   = workItems.filter(t => t.status !== 'completed').length;
-  const completedCount = workItems.filter(t => t.status === 'completed').length;
-  const staffMsgCount  = messages.filter(m => !m.is_from_client).length;
+  // Company switcher — get unique non-null business names from work items
+  const businessNames = [...new Set(workItems.map(w => w.business_name).filter(Boolean) as string[])];
+  const filteredWorkItems = selectedBusiness
+    ? workItems.filter(w => w.business_name === selectedBusiness)
+    : workItems;
+
+  const pendingCount   = filteredWorkItems.filter(t => t.status !== 'completed').length;
+  const completedCount = filteredWorkItems.filter(t => t.status === 'completed').length;
+  // Filter out system task-completion messages (✅/↩️ prefix) from the visible chat
+  const visibleMessages = messages.filter(m =>
+    !(m.is_from_client && (m.message.startsWith('✅') || m.message.startsWith('↩️')))
+  );
+  const staffMsgCount  = visibleMessages.filter(m => !m.is_from_client).length;
   const unreadCount    = Math.max(0, staffMsgCount - lastReadCount);
 
   useEffect(() => {
@@ -208,10 +221,14 @@ export default function PortalPage() {
   ];
 
   return (
-    <div className="h-screen overflow-y-auto bg-background">
+    <div className="min-h-screen overflow-y-auto bg-background" style={{ minHeight: '100dvh' }}>
 
       {/* ── Header ── */}
-      <header className="bg-card/90 backdrop-blur-xl border-b border-border sticky top-0 z-50">
+      {/* safe-area-inset-top pushes content below iPhone notch / Dynamic Island */}
+      <header
+        className="bg-card/90 backdrop-blur-xl border-b border-border sticky top-0 z-50"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
 
           {/* Logo */}
@@ -377,36 +394,81 @@ export default function PortalPage() {
                   exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}
                   className="bg-card rounded-2xl border border-border p-4 sm:p-5"
                 >
-                  <h2 className="text-sm font-semibold text-text-primary mb-4">My Tasks</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold text-text-primary">My Tasks</h2>
+                    <span className="text-xs text-text-muted">{pendingCount} pending · {completedCount} done</span>
+                  </div>
+
+                  {/* Company switcher — only shows when there are multiple businesses */}
+                  {businessNames.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      <button
+                        onClick={() => setSelectedBusiness(null)}
+                        className={clsx(
+                          'px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all',
+                          selectedBusiness === null
+                            ? 'bg-primary-600 text-white border-primary-600'
+                            : 'bg-surface-hover text-text-secondary border-border hover:border-border-dark'
+                        )}
+                      >
+                        All Companies
+                      </button>
+                      {businessNames.map(biz => (
+                        <button
+                          key={biz}
+                          onClick={() => setSelectedBusiness(biz)}
+                          className={clsx(
+                            'px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all',
+                            selectedBusiness === biz
+                              ? 'bg-accent-600 text-white border-accent-600'
+                              : 'bg-surface-hover text-text-secondary border-border hover:border-border-dark'
+                          )}
+                        >
+                          {biz}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {loading ? (
                     <div className="flex items-center justify-center py-10">
                       <Loader2 className="w-5 h-5 text-primary-400 animate-spin" />
                     </div>
-                  ) : workItems.length === 0 ? (
+                  ) : filteredWorkItems.length === 0 ? (
                     <div className="text-center py-10">
                       <CheckCircle2 className="w-10 h-10 text-success/40 mx-auto mb-2" />
-                      <p className="text-sm font-medium text-text-primary">No tasks assigned yet</p>
+                      <p className="text-sm font-medium text-text-primary">
+                        {selectedBusiness ? `No tasks for ${selectedBusiness}` : 'No tasks assigned yet'}
+                      </p>
                       <p className="text-xs text-text-muted mt-1">Your accountant will assign tasks here when needed.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {workItems.map((item, i) => {
+                      {filteredWorkItems.map((item, i) => {
                         const status = statusConfig[item.status] ?? statusConfig['not-started'];
+                        const isCompleted = item.status === 'completed';
                         return (
                           <motion.div key={item.id}
                             initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
                             className="flex items-start gap-3 p-3 rounded-xl hover:bg-surface-hover active:bg-surface-hover transition-colors"
                           >
-                            <div className={clsx(
-                              'w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
-                              item.status === 'completed' ? 'bg-success border-success' : 'border-border'
-                            )}>
-                              {item.status === 'completed' && <CheckCircle2 className="w-3 h-3 text-white" />}
-                            </div>
+                            {/* Tappable checkbox */}
+                            <button
+                              onClick={() => toggleTask(item.id, item.status)}
+                              className={clsx(
+                                'w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors',
+                                isCompleted
+                                  ? 'bg-success border-success'
+                                  : 'border-border hover:border-success/60 hover:bg-success/10'
+                              )}
+                              aria-label={isCompleted ? 'Mark incomplete' : 'Mark complete'}
+                            >
+                              {isCompleted && <CheckCircle2 className="w-3 h-3 text-white" />}
+                            </button>
                             <div className="flex-1 min-w-0">
                               <p className={clsx(
                                 'text-sm font-medium leading-snug',
-                                item.status === 'completed' ? 'text-text-muted line-through' : 'text-text-primary'
+                                isCompleted ? 'text-text-muted line-through' : 'text-text-primary'
                               )}>
                                 {item.title}
                               </p>
@@ -414,6 +476,11 @@ export default function PortalPage() {
                                 <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full', status.bg, status.color)}>
                                   {status.label}
                                 </span>
+                                {item.business_name && !selectedBusiness && (
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 bg-accent-50 text-accent-700 rounded-full border border-accent-100">
+                                    {item.business_name}
+                                  </span>
+                                )}
                                 {item.due_date && (
                                   <span className="flex items-center gap-1 text-[10px] text-text-muted">
                                     <Clock className="w-3 h-3" />
@@ -422,7 +489,6 @@ export default function PortalPage() {
                                 )}
                               </div>
                             </div>
-                            <ChevronRight className="w-4 h-4 text-text-muted flex-shrink-0 mt-0.5" />
                           </motion.div>
                         );
                       })}
@@ -607,14 +673,33 @@ export default function PortalPage() {
                                           <Download className="w-3.5 h-3.5 text-text-muted" />
                                         </button>
                                         {doc.uploaded_by === null && (
-                                          <button
-                                            onClick={async () => {
-                                              if (!confirm('Delete this file?')) return;
-                                              await deleteDocument(doc.id, doc.file_path);
-                                            }}
-                                            className="p-1.5 rounded-lg hover:bg-danger/10 active:bg-danger/20 transition-colors" title="Delete">
-                                            <Trash2 className="w-3.5 h-3.5 text-danger" />
-                                          </button>
+                                          deleteConfirmId === doc.id ? (
+                                            <div className="flex items-center gap-1">
+                                              <button
+                                                onClick={async () => {
+                                                  setDeleting(true);
+                                                  try { await deleteDocument(doc.id, doc.file_path); }
+                                                  finally { setDeleteConfirmId(null); setDeleting(false); }
+                                                }}
+                                                disabled={deleting}
+                                                className="px-2 py-1 text-[10px] font-bold rounded-md bg-danger text-white hover:bg-danger/90 transition-colors disabled:opacity-50"
+                                              >
+                                                {deleting ? '…' : 'Yes'}
+                                              </button>
+                                              <button
+                                                onClick={() => setDeleteConfirmId(null)}
+                                                className="px-2 py-1 text-[10px] font-medium rounded-md border border-border text-text-muted hover:bg-surface-hover transition-colors"
+                                              >
+                                                No
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <button
+                                              onClick={() => setDeleteConfirmId(doc.id)}
+                                              className="p-1.5 rounded-lg hover:bg-danger/10 active:bg-danger/20 transition-colors" title="Delete">
+                                              <Trash2 className="w-3.5 h-3.5 text-danger" />
+                                            </button>
+                                          )
                                         )}
                                       </div>
                                     </motion.div>
@@ -656,7 +741,7 @@ export default function PortalPage() {
                       <div className="flex items-center justify-center h-full">
                         <Loader2 className="w-5 h-5 text-primary-400 animate-spin" />
                       </div>
-                    ) : messages.length === 0 ? (
+                    ) : visibleMessages.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
                         <MessageSquare className="w-10 h-10 text-text-muted/25" />
                         <div>
@@ -665,7 +750,7 @@ export default function PortalPage() {
                         </div>
                       </div>
                     ) : (
-                      messages.map((msg, i) => (
+                      visibleMessages.map((msg, i) => (
                         <motion.div key={msg.id}
                           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
                           className={clsx('flex gap-2.5', msg.is_from_client && 'flex-row-reverse')}
@@ -705,6 +790,7 @@ export default function PortalPage() {
                         onChange={e => setMessageText(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && !sending && handleSendMessage()}
                         className="flex-1 h-10 px-4 text-sm bg-card rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 placeholder:text-text-muted text-text-primary"
+                        style={{ fontSize: '16px' }}
                       />
                       <motion.button
                         onClick={handleSendMessage}

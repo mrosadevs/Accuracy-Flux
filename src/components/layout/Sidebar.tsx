@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Users, Briefcase, KanbanSquare, Mail,
+  LayoutDashboard, Users, KanbanSquare, Mail,
   Clock, Settings, ChevronLeft, ChevronRight, Search,
   Zap, Upload, X, UserCog
 } from 'lucide-react';
@@ -13,12 +13,11 @@ import { useProfile } from '@/lib/hooks/use-profile';
 import { useNotifications } from '@/lib/hooks/use-notifications';
 
 const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', badge: null },
-  { href: '/work', icon: Briefcase, label: 'Work', badge: null },
-  { href: '/kanban', icon: KanbanSquare, label: 'Board', badge: null },
-  { href: '/clients', icon: Users, label: 'Clients', badge: null },
-  { href: '/email', icon: Mail, label: 'Triage', badge: null },
-  { href: '/time-billing', icon: Clock, label: 'Time & Billing', badge: null },
+  { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard',     badge: null },
+  { href: '/kanban',       icon: KanbanSquare,    label: 'Board',         badge: null },
+  { href: '/clients',      icon: Users,           label: 'Clients',       badge: null },
+  { href: '/email',        icon: Mail,            label: 'Triage',        badge: null },
+  { href: '/time-billing', icon: Clock,           label: 'Time & Billing', badge: null },
 ];
 
 const roleBadgeColors: Record<string, string> = {

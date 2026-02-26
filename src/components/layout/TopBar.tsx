@@ -23,7 +23,7 @@ export default function TopBar({ title, subtitle, onMenuClick }: TopBarProps) {
   const [showQuickActions, setShowQuickActions] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { activeTimer, elapsedFormatted } = useActiveTimer();
-  const { notifications, unreadCount, markAllRead } = useNotifications();
+  const { notifications, unreadCount, markAllRead, markOneRead } = useNotifications();
   const router = useRouter();
 
   function quickAction(action: string) {
@@ -143,12 +143,7 @@ export default function TopBar({ title, subtitle, onMenuClick }: TopBarProps) {
         {/* Notifications Bell */}
         <div className="relative">
           <motion.button
-            onClick={() => {
-              const opening = !showNotifications;
-              setShowNotifications(opening);
-              // Opening the bell = "I saw it" — mark everything as read immediately
-              if (opening && unreadCount > 0) markAllRead();
-            }}
+            onClick={() => setShowNotifications(o => !o)}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className="relative p-2 hover:bg-surface-hover rounded-xl transition-colors"
@@ -197,7 +192,11 @@ export default function TopBar({ title, subtitle, onMenuClick }: TopBarProps) {
                         {notifications.map(notif => (
                           <button
                             key={notif.id}
-                            onClick={() => { setShowNotifications(false); router.push(notif.href); }}
+                            onClick={() => {
+                              setShowNotifications(false);
+                              if (!notif.read) markOneRead(notif.id);
+                              router.push(notif.href);
+                            }}
                             className={clsx(
                               'w-full text-left px-3 py-2.5 rounded-lg transition-colors',
                               notif.read ? 'hover:bg-surface-hover' : 'bg-primary-50/50 hover:bg-primary-50'

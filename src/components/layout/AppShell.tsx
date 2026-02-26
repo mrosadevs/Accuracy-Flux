@@ -20,15 +20,27 @@ export default function AppShell({ children, title, subtitle }: AppShellProps) {
   const { profile, loading: profileLoading } = useProfile();
   const router = useRouter();
 
-  // Redirect clients away from the staff portal to their own portal
   useEffect(() => {
-    if (!profileLoading && profile?.role === 'client') {
+    if (profileLoading) return;
+    if (profile?.role === 'client') {
       router.replace('/portal');
+    } else if (!profile) {
+      // Not logged in — send to login page
+      router.replace('/login');
     }
   }, [profile, profileLoading, router]);
 
-  // Don't render staff UI for client accounts (prevents flash of content)
-  if (!profileLoading && profile?.role === 'client') return null;
+  // Show a full-page loader while auth is being determined
+  if (profileLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Don't render staff UI for non-staff accounts (prevents flash of content)
+  if (!profile || profile.role === 'client') return null;
 
   return (
     <div className="min-h-screen gradient-mesh bg-background">

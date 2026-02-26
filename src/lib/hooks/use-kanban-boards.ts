@@ -5,10 +5,10 @@ import { useSupabase, isSupabaseConfigured } from "./use-supabase";
 import type { KanbanBoard } from "@/lib/types/database";
 
 const MOCK_BOARDS: KanbanBoard[] = [
-  { id: 'mock-board-2026', title: '2026 Tax Season', year: 2026, starred: true, created_by: null, created_at: new Date().toISOString() },
-  { id: 'mock-board-2025', title: '2025 Tax Season', year: 2025, starred: false, created_by: null, created_at: new Date().toISOString() },
-  { id: 'mock-board-onboarding', title: 'Client Onboarding', year: null, starred: true, created_by: null, created_at: new Date().toISOString() },
-  { id: 'mock-board-advisory', title: 'Advisory Projects', year: null, starred: false, created_by: null, created_at: new Date().toISOString() },
+  { id: 'mock-board-2026', title: '2026 Tax Season', year: 2026, starred: true, is_archived: false, created_by: null, created_at: new Date().toISOString() },
+  { id: 'mock-board-2025', title: '2025 Tax Season', year: 2025, starred: false, is_archived: false, created_by: null, created_at: new Date().toISOString() },
+  { id: 'mock-board-onboarding', title: 'Client Onboarding', year: null, starred: true, is_archived: false, created_by: null, created_at: new Date().toISOString() },
+  { id: 'mock-board-advisory', title: 'Advisory Projects', year: null, starred: false, is_archived: false, created_by: null, created_at: new Date().toISOString() },
 ];
 
 export function useKanbanBoards() {
@@ -41,6 +41,7 @@ export function useKanbanBoards() {
         title,
         year,
         starred: false,
+        is_archived: false,
         created_by: null,
         created_at: new Date().toISOString(),
       };

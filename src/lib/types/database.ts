@@ -35,6 +35,7 @@ export interface Database {
           assigned_to: string;
           tags: string[];
           businesses: string[];
+          business_entities: Json; // Array<{ name: string; entity_type: EntityType }>
           total_billed: number;
           outstanding_balance: number;
           last_activity: string;
@@ -62,9 +63,14 @@ export interface Database {
           budget: number;
           time_spent: number;
           description: string | null;
+          show_in_portal: boolean;
+          board_id: string | null;
+          column_id: string | null;
+          tags: string[];
+          sort_order: number;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['work_items']['Row'], 'id' | 'created_at'>;
+        Insert: Omit<Database['public']['Tables']['work_items']['Row'], 'id' | 'created_at' | 'show_in_portal' | 'tags' | 'sort_order'> & { show_in_portal?: boolean; tags?: string[]; sort_order?: number };
         Update: Partial<Database['public']['Tables']['work_items']['Insert']>;
       };
       tasks: {
@@ -89,10 +95,11 @@ export interface Database {
           title: string;
           year: number | null;
           starred: boolean;
+          is_archived: boolean;
           created_by: string | null;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['kanban_boards']['Row'], 'id' | 'created_at'>;
+        Insert: Omit<Database['public']['Tables']['kanban_boards']['Row'], 'id' | 'created_at' | 'is_archived'> & { is_archived?: boolean };
         Update: Partial<Database['public']['Tables']['kanban_boards']['Insert']>;
       };
       kanban_columns: {
@@ -162,6 +169,7 @@ export interface Database {
           uploaded_by: string | null;
           description: string | null;
           tags: string[];
+          business_name: string | null;
           created_at: string;
         };
         Insert: Omit<Database['public']['Tables']['portal_documents']['Row'], 'id' | 'created_at'>;
@@ -219,7 +227,23 @@ export interface Database {
   };
 }
 
-// Convenience type aliases
+// ── Business entity types ──────────────────────────────────────────────────
+export type EntityType =
+  | 'individual'
+  | 'sole-prop'
+  | 'llc-single'
+  | 'llc-multi'
+  | 's-corp'
+  | 'c-corp'
+  | 'partnership'
+  | 'non-profit';
+
+export interface BusinessEntity {
+  name: string;
+  entity_type: EntityType;
+}
+
+// ── Convenience type aliases ───────────────────────────────────────────────
 export type Profile = Database['public']['Tables']['profiles']['Row'];
 export type Client = Database['public']['Tables']['clients']['Row'];
 export type WorkItem = Database['public']['Tables']['work_items']['Row'];

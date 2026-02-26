@@ -77,13 +77,19 @@ export function useNotifications() {
     fetchPortal();
     fetchThreads();
     if (!configured) return;
+
+    // Real-time subscription (may not work on all browsers due to WebSocket restrictions)
     const ch = supabase
       .channel("notifications-all")
       .on("postgres_changes", { event: "*", schema: "public", table: "portal_messages" }, fetchPortal)
       .on("postgres_changes", { event: "*", schema: "public", table: "internal_threads" }, fetchThreads)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "internal_messages" }, fetchThreads)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    // Polling fallback: refresh every 30 seconds in case WebSocket is blocked
+    const poll = setInterval(() => { fetchPortal(); fetchThreads(); }, 30_000);
+
+    return () => { supabase.removeChannel(ch); clearInterval(poll); };
   }, [fetchPortal, fetchThreads, supabase, configured]);
 
   // Listen for thread-read events dispatched by useTriage's selectThread
@@ -133,5 +139,24 @@ export function useNotifications() {
     await fetchPortal();
   }
 
-  return { notifications, unreadCount, markAllRead, refetch: fetchPortal };
+  async function markOneRead(notifId: string) {
+    if (!configured) return;
+    if (notifId.startsWith("thread_")) {
+      const threadId = notifId.replace("thread_", "");
+      try {
+        localStorage.setItem(`af_read_thread_${threadId}`, new Date().toISOString());
+        window.dispatchEvent(new CustomEvent("af-thread-read", { detail: { threadId } }));
+      } catch { /* ignore */ }
+      setThreadReadTick(t => t + 1);
+    } else {
+      // Portal message
+      await supabase
+        .from("portal_messages")
+        .update({ read_at: new Date().toISOString() })
+        .eq("id", notifId);
+      await fetchPortal();
+    }
+  }
+
+  return { notifications, unreadCount, markAllRead, markOneRead, refetch: fetchPortal };
 }

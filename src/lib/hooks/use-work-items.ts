@@ -99,6 +99,7 @@ export function useWorkItems() {
         progress: 0,
         budget: input.budget ?? 0,
         time_spent: 0,
+        show_in_portal: false,
       })
       .select().single();
     if (error) throw error;
@@ -115,9 +116,18 @@ export function useWorkItems() {
 
   async function deleteWorkItem(id: string) {
     if (!configured) return;
-    const { error } = await supabase.from("work_items").delete().eq("id", id);
-    if (error) throw error;
-    await fetchWorkItems();
+    // Optimistic update: remove immediately so UI feels instant (fixes Edge double-click issue)
+    setWorkItems(prev => prev.filter(w => w.id !== id));
+    try {
+      const { error } = await supabase.from("work_items").delete().eq("id", id);
+      if (error) {
+        await fetchWorkItems(); // Revert on error
+        throw error;
+      }
+    } catch (err) {
+      await fetchWorkItems();
+      throw err;
+    }
   }
 
   async function addTask(workItemId: string, title: string, assignee?: string, assigneeId?: string, dueDate?: string, status?: string) {
@@ -145,8 +155,12 @@ export function useWorkItems() {
 
   async function deleteTask(taskId: string) {
     if (!configured) return;
+    // Optimistic update: remove task immediately from its parent work item
+    setWorkItems(prev => prev.map(w => ({
+      ...w,
+      tasks: w.tasks.filter(t => t.id !== taskId),
+    })));
     await supabase.from("tasks").delete().eq("id", taskId);
-    await fetchWorkItems();
   }
 
   return { workItems, loading, updateTaskCompletion, addWorkItem, updateWorkItem, deleteWorkItem, addTask, deleteTask, refetch: fetchWorkItems };

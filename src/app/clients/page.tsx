@@ -11,7 +11,8 @@ import {
 import clsx from 'clsx';
 import { useClients } from '@/lib/hooks/use-clients';
 import { useInvoices } from '@/lib/hooks/use-invoices';
-import type { Client } from '@/lib/types/database';
+import type { Client, BusinessEntity, EntityType } from '@/lib/types/database';
+import { ENTITY_TYPE_LABELS, ENTITY_TYPE_SHORT } from '@/lib/utils/tax-deadlines';
 
 const statusColors = {
   active: 'bg-success/10 text-success border-success/20',
@@ -144,14 +145,18 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
   const [phone, setPhone] = useState('');
   const [type, setType] = useState<'individual' | 'business'>('individual');
   const [status, setStatus] = useState<'active' | 'onboarding' | 'inactive'>('onboarding');
-  const [businesses, setBusinesses] = useState<string[]>([]);
+  const [bizEntities, setBizEntities] = useState<BusinessEntity[]>([]);
   const [bizInput, setBizInput] = useState('');
+  const [bizEntityType, setBizEntityType] = useState<EntityType>('s-corp');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   function addBusiness() {
     const v = bizInput.trim();
-    if (v && !businesses.includes(v)) { setBusinesses(prev => [...prev, v]); setBizInput(''); }
+    if (v && !bizEntities.find(b => b.name === v)) {
+      setBizEntities(prev => [...prev, { name: v, entity_type: bizEntityType }]);
+      setBizInput('');
+    }
   }
 
   async function handleSave() {
@@ -159,7 +164,11 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
     if (!email.trim()) { setError('Email is required.'); return; }
     setSaving(true); setError('');
     try {
-      await onSave({ name: name.trim(), email: email.trim(), phone: phone.trim(), type, status, businesses });
+      await onSave({
+        name: name.trim(), email: email.trim(), phone: phone.trim(), type, status,
+        businesses: bizEntities.map(b => b.name),
+        business_entities: bizEntities as unknown as import('@/lib/types/database').Json,
+      });
       onClose();
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed to create client'); }
     finally { setSaving(false); }
@@ -222,28 +231,38 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
             <div className="flex items-center gap-2">
               <Briefcase className="w-3.5 h-3.5 text-accent-600" />
               <span className="text-xs font-semibold text-text-secondary">Business Entities</span>
-              <span className="text-[10px] text-text-muted">(for clients with multiple businesses)</span>
+              <span className="text-[10px] text-text-muted">(leave empty for a single-entity client)</span>
             </div>
             <div className="flex gap-2">
-              <input type="text" placeholder="e.g. Smith LLC, Smith Rentals…" value={bizInput}
+              <input type="text" placeholder="Business name…" value={bizInput}
                 onChange={e => setBizInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addBusiness(); } }}
                 className="flex-1 h-9 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-400 transition-all placeholder:text-text-muted" />
+              <select value={bizEntityType} onChange={e => setBizEntityType(e.target.value as EntityType)}
+                className="h-9 px-2 text-xs bg-white rounded-xl border border-accent-200 focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-400 transition-all">
+                {(Object.entries(ENTITY_TYPE_SHORT) as [EntityType, string][]).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
               <button type="button" onClick={addBusiness}
                 className="h-9 px-3 rounded-xl text-xs font-semibold bg-accent-50 text-accent-700 hover:bg-accent-100 border border-accent-200 transition-colors">Add</button>
             </div>
-            {businesses.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {businesses.map((biz, i) => (
-                  <span key={i} className="flex items-center gap-1 px-2.5 py-1 bg-accent-50 text-accent-700 rounded-full text-xs font-medium border border-accent-200">
-                    <Briefcase className="w-3 h-3" />{biz}
-                    <button type="button" onClick={() => setBusinesses(prev => prev.filter((_, j) => j !== i))}
-                      className="ml-0.5 hover:text-danger transition-colors"><X className="w-2.5 h-2.5" /></button>
-                  </span>
+            {bizEntities.length > 0 ? (
+              <div className="space-y-1.5">
+                {bizEntities.map((biz, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-accent-100">
+                    <Briefcase className="w-3.5 h-3.5 text-accent-500 flex-shrink-0" />
+                    <span className="text-sm font-medium text-text-primary flex-1 min-w-0 truncate">{biz.name}</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 bg-accent-50 text-accent-700 rounded-full border border-accent-200 flex-shrink-0">
+                      {ENTITY_TYPE_SHORT[biz.entity_type]}
+                    </span>
+                    <button type="button" onClick={() => setBizEntities(prev => prev.filter((_, j) => j !== i))}
+                      className="p-0.5 hover:text-danger transition-colors text-text-muted flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+                  </div>
                 ))}
               </div>
             ) : (
-              <p className="text-[10px] text-text-muted">Leave empty for a single-entity client.</p>
+              <p className="text-[10px] text-text-muted">No business entities added yet.</p>
             )}
           </div>
 
@@ -348,21 +367,34 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
   const [email, setEmail] = useState(client.email);
   const [phone, setPhone] = useState(client.phone ?? "");
   const [status, setStatus] = useState<Client["status"]>(client.status);
-  const [businesses, setBusinesses] = useState<string[]>(client.businesses ?? []);
+  const [bizEntities, setBizEntities] = useState<BusinessEntity[]>(() => {
+    // Use stored business_entities if available; fall back to plain businesses array
+    const stored = client.business_entities as BusinessEntity[] | null;
+    if (stored && Array.isArray(stored) && stored.length > 0) return stored;
+    return (client.businesses ?? []).map(name => ({ name, entity_type: 's-corp' as EntityType }));
+  });
   const [bizInput, setBizInput] = useState('');
+  const [bizEntityType, setBizEntityType] = useState<EntityType>('s-corp');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   function addBusiness() {
     const v = bizInput.trim();
-    if (v && !businesses.includes(v)) { setBusinesses(prev => [...prev, v]); setBizInput(''); }
+    if (v && !bizEntities.find(b => b.name === v)) {
+      setBizEntities(prev => [...prev, { name: v, entity_type: bizEntityType }]);
+      setBizInput('');
+    }
   }
 
   async function handleSave() {
     if (!name.trim()) { setError("Client name is required."); return; }
     setSaving(true); setError("");
     try {
-      await onSave(client.id, { name: name.trim(), email: email.trim(), phone: phone.trim(), status, businesses });
+      await onSave(client.id, {
+        name: name.trim(), email: email.trim(), phone: phone.trim(), status,
+        businesses: bizEntities.map(b => b.name),
+        business_entities: bizEntities as unknown as import('@/lib/types/database').Json,
+      });
       onClose();
     } catch (err: unknown) { setError(err instanceof Error ? err.message : "Failed to update client"); }
     finally { setSaving(false); }
@@ -417,28 +449,38 @@ function EditClientModal({ client, onClose, onSave }: { client: Client; onClose:
             <div className="flex items-center gap-2">
               <Briefcase className="w-3.5 h-3.5 text-accent-600" />
               <span className="text-xs font-semibold text-text-secondary">Business Entities</span>
-              <span className="text-[10px] text-text-muted">(for clients with multiple businesses)</span>
+              <span className="text-[10px] text-text-muted">(leave empty for a single-entity client)</span>
             </div>
             <div className="flex gap-2">
-              <input type="text" placeholder="e.g. Smith LLC, Smith Rentals…" value={bizInput}
+              <input type="text" placeholder="Business name…" value={bizInput}
                 onChange={e => setBizInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addBusiness(); } }}
                 className="flex-1 h-9 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-400 transition-all placeholder:text-text-muted" />
+              <select value={bizEntityType} onChange={e => setBizEntityType(e.target.value as EntityType)}
+                className="h-9 px-2 text-xs bg-white rounded-xl border border-accent-200 focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-400 transition-all">
+                {(Object.entries(ENTITY_TYPE_SHORT) as [EntityType, string][]).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
               <button type="button" onClick={addBusiness}
                 className="h-9 px-3 rounded-xl text-xs font-semibold bg-accent-50 text-accent-700 hover:bg-accent-100 border border-accent-200 transition-colors">Add</button>
             </div>
-            {businesses.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {businesses.map((biz, i) => (
-                  <span key={i} className="flex items-center gap-1 px-2.5 py-1 bg-accent-50 text-accent-700 rounded-full text-xs font-medium border border-accent-200">
-                    <Briefcase className="w-3 h-3" />{biz}
-                    <button type="button" onClick={() => setBusinesses(prev => prev.filter((_, j) => j !== i))}
-                      className="ml-0.5 hover:text-danger transition-colors"><X className="w-2.5 h-2.5" /></button>
-                  </span>
+            {bizEntities.length > 0 ? (
+              <div className="space-y-1.5">
+                {bizEntities.map((biz, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-accent-100">
+                    <Briefcase className="w-3.5 h-3.5 text-accent-500 flex-shrink-0" />
+                    <span className="text-sm font-medium text-text-primary flex-1 min-w-0 truncate">{biz.name}</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 bg-accent-50 text-accent-700 rounded-full border border-accent-200 flex-shrink-0">
+                      {ENTITY_TYPE_SHORT[biz.entity_type]}
+                    </span>
+                    <button type="button" onClick={() => setBizEntities(prev => prev.filter((_, j) => j !== i))}
+                      className="p-0.5 hover:text-danger transition-colors text-text-muted flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+                  </div>
                 ))}
               </div>
             ) : (
-              <p className="text-[10px] text-text-muted">Leave empty for a single-entity client.</p>
+              <p className="text-[10px] text-text-muted">No business entities added yet.</p>
             )}
           </div>
 

@@ -31,23 +31,30 @@ export function useProfile() {
   const configured = isSupabaseConfigured();
 
   useEffect(() => {
+    // Safety timeout: never show spinner forever (Edge/Chrome auth hangs)
+    const safetyTimer = setTimeout(() => setLoading(false), 6000);
+
     async function load() {
       if (!configured) {
+        clearTimeout(safetyTimer);
         setProfile(MOCK_PROFILE);
         setLoading(false);
         return;
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { clearTimeout(safetyTimer); setLoading(false); return; }
 
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
 
-      setProfile(data ?? null);
+        setProfile(data ?? null);
+      } catch { /* ignore auth errors */ }
+      clearTimeout(safetyTimer);
       setLoading(false);
     }
 
@@ -56,7 +63,7 @@ export function useProfile() {
     if (!configured) return;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => load());
-    return () => subscription.unsubscribe();
+    return () => { clearTimeout(safetyTimer); subscription.unsubscribe(); };
   }, [supabase, configured]);
 
   async function updateProfile(updates: Partial<Profile>) {

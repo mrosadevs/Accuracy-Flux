@@ -11,6 +11,7 @@ export interface PortalWorkItem {
   priority: string;
   due_date: string | null;
   type: string;
+  business_name: string | null;
 }
 
 export function usePortal(clientId?: string) {
@@ -134,36 +135,76 @@ export function usePortalClient() {
   const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
+    // Safety timeout: never spin forever if auth request hangs (Edge/Chrome issue)
+    const safetyTimer = setTimeout(() => setAuthLoading(false), 6000);
+
     async function load() {
-      if (!configured) { setAuthLoading(false); return; }
+      if (!configured) { clearTimeout(safetyTimer); setAuthLoading(false); return; }
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setAuthLoading(false); return; }
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { clearTimeout(safetyTimer); setAuthLoading(false); return; }
 
-      const { data: profileData } = await supabase
-        .from('profiles').select('role').eq('id', user.id).single();
-      setUserRole(profileData?.role ?? null);
+        const { data: profileData } = await supabase
+          .from('profiles').select('role').eq('id', user.id).single();
+        setUserRole(profileData?.role ?? null);
 
-      const { data: clientData } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('portal_user_id', user.id)
-        .single();
+        const { data: clientData } = await supabase
+          .from('clients')
+          .select('*')
+          .eq('portal_user_id', user.id)
+          .single();
 
-      if (clientData) {
-        setClient(clientData);
-        const { data: items } = await supabase
-          .from('work_items')
-          .select('id, title, status, priority, due_date, type')
-          .eq('client_id', clientData.id)
-          .order('created_at', { ascending: false });
-        setWorkItems(items ?? []);
-      }
+        if (clientData) {
+          setClient(clientData);
+          // Only show work items explicitly marked as visible in the client portal
+          const { data: items } = await supabase
+            .from('work_items')
+            .select('id, title, status, priority, due_date, type, business_name')
+            .eq('client_id', clientData.id)
+            .eq('show_in_portal', true)
+            .order('created_at', { ascending: false });
+          setWorkItems(items ?? []);
+        }
+      } catch { /* ignore auth errors */ }
 
+      clearTimeout(safetyTimer);
       setAuthLoading(false);
     }
     load();
+    return () => clearTimeout(safetyTimer);
   }, [supabase, configured]);
 
-  return { client, workItems, authLoading, userRole };
+  async function toggleTask(workItemId: string, currentStatus: string) {
+    if (!client) return;
+    const newStatus = currentStatus === 'completed' ? 'not-started' : 'completed';
+    const item = workItems.find(w => w.id === workItemId);
+    if (!item) return;
+
+    // Optimistic UI update
+    setWorkItems(prev => prev.map(w =>
+      w.id === workItemId ? { ...w, status: newStatus } : w
+    ));
+
+    const res = await fetch('/api/portal-complete-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workItemId,
+        clientId: client.id,
+        clientName: client.name,
+        workItemTitle: item.title,
+        newStatus,
+      }),
+    });
+
+    if (!res.ok) {
+      // Revert on error
+      setWorkItems(prev => prev.map(w =>
+        w.id === workItemId ? { ...w, status: currentStatus } : w
+      ));
+    }
+  }
+
+  return { client, workItems, authLoading, userRole, toggleTask };
 }
