@@ -143,7 +143,12 @@ export default function TopBar({ title, subtitle, onMenuClick }: TopBarProps) {
         {/* Notifications Bell */}
         <div className="relative">
           <motion.button
-            onClick={() => setShowNotifications(!showNotifications)}
+            onClick={() => {
+              const opening = !showNotifications;
+              setShowNotifications(opening);
+              // Opening the bell = "I saw it" — mark everything as read immediately
+              if (opening && unreadCount > 0) markAllRead();
+            }}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className="relative p-2 hover:bg-surface-hover rounded-xl transition-colors"

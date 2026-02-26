@@ -45,7 +45,6 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
   const [businessName, setBusinessName] = useState('');
   const [type, setType] = useState<WorkItem['type']>('tax-return');
   const [priority, setPriority] = useState<WorkItem['priority']>('medium');
-  const [status, setStatus] = useState<WorkItem['status']>('not-started');
   const [dueDate, setDueDate] = useState('');
   const [startDate, setStartDate] = useState('');
   const [budget, setBudget] = useState('');
@@ -69,7 +68,7 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
         client_id: clientId || null,
         client_name: selectedClient?.name ?? '',
         business_name: businessName || null,
-        type, priority, status,
+        type, priority,
         due_date: dueDate || null,
         start_date: startDate || null,
         budget: parseFloat(budget) || 0,
@@ -144,17 +143,6 @@ function NewWorkItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
                 <option value="urgent">Urgent</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Status</label>
-              <select value={status} onChange={e => setStatus(e.target.value as WorkItem['status'])}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all">
-                <option value="not-started">Not Started</option>
-                <option value="in-progress">In Progress</option>
-                <option value="waiting-on-client">Waiting on Client</option>
-                <option value="in-review">In Review</option>
-                <option value="completed">Completed</option>
               </select>
             </div>
             <div>
@@ -395,7 +383,6 @@ function DeleteWorkItemModal({ item, onClose, onDelete }: { item: WorkItemWithTa
 export default function WorkPage() {
   const { workItems, loading, updateTaskCompletion, addWorkItem, updateWorkItem, deleteWorkItem, addTask, deleteTask } = useWorkItems();
   const { members } = useTeamMembers();
-  const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewItem, setShowNewItem] = useState(false);
   const [editItem, setEditItem] = useState<WorkItemWithTasks | null>(null);
@@ -405,6 +392,7 @@ export default function WorkPage() {
   const [addingTaskFor, setAddingTaskFor] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskAssignee, setNewTaskAssignee] = useState('');
+  const [newTaskStatus, setNewTaskStatus] = useState('not-started');
   const [savingTask, setSavingTask] = useState(false);
 
   const filteredItems = workItems.filter(item =>
@@ -417,9 +405,10 @@ export default function WorkPage() {
     setSavingTask(true);
     try {
       const m = members.find(x => x.name === newTaskAssignee);
-      await addTask(workItemId, newTaskTitle.trim(), newTaskAssignee || undefined, m?.id || undefined);
+      await addTask(workItemId, newTaskTitle.trim(), newTaskAssignee || undefined, m?.id || undefined, undefined, newTaskStatus);
       setNewTaskTitle('');
       setNewTaskAssignee('');
+      setNewTaskStatus('not-started');
       setAddingTaskFor(null);
     } finally {
       setSavingTask(false);
@@ -478,15 +467,14 @@ export default function WorkPage() {
           </div>
         )}
 
-        {/* Work Items List */}
-        <div className="space-y-3">
+        {/* Work Pipeline — task-centric view */}
+        <div className="space-y-4">
           {filteredItems.map((item, i) => {
-            const status = statusConfig[item.status];
-            const priority = priorityConfig[item.priority];
-            const type = typeConfig[item.type];
-            const isExpanded = expandedItem === item.id;
+            const statusCfg = statusConfig[item.status];
+            const priorityCfg = priorityConfig[item.priority];
+            const typeCfg = typeConfig[item.type];
             const completedTasks = item.tasks.filter(t => t.completed).length;
-            const StatusIcon = status.icon;
+            const StatusIcon = statusCfg.icon;
 
             return (
               <motion.div
@@ -495,29 +483,14 @@ export default function WorkPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 layout
-                className="bg-white rounded-2xl border border-border hover:shadow-md hover:shadow-primary-500/5 transition-all"
+                className="bg-white rounded-2xl border border-border hover:shadow-md hover:shadow-primary-500/5 transition-all overflow-hidden"
               >
-                {/* Main Row */}
-                <div
-                  className="flex items-center gap-4 p-4 cursor-pointer"
-                  onClick={() => setExpandedItem(isExpanded ? null : item.id)}
-                >
-                  {/* Expand Arrow */}
-                  <motion.div
-                    animate={{ rotate: isExpanded ? 90 : 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="w-5 h-5 flex items-center justify-center"
-                  >
-                    <ChevronRight className="w-4 h-4 text-text-muted" />
-                  </motion.div>
-
-                  {/* Progress Ring */}
-                  <div className="relative w-10 h-10 flex-shrink-0">
-                    <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
-                      <path
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none" stroke="#f1f5f9" strokeWidth="3"
-                      />
+                {/* Work Item Header */}
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-border-light bg-surface-subtle/30">
+                  {/* Progress ring */}
+                  <div className="relative w-8 h-8 flex-shrink-0">
+                    <svg className="w-8 h-8 -rotate-90" viewBox="0 0 36 36">
+                      <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f1f5f9" strokeWidth="3" />
                       <motion.path
                         d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                         fill="none"
@@ -528,49 +501,44 @@ export default function WorkPage() {
                         transition={{ duration: 1, delay: i * 0.1, ease: 'easeOut' }}
                       />
                     </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-text-primary">
-                      {item.progress}%
-                    </span>
+                    <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-text-primary">{item.progress}%</span>
                   </div>
 
-                  {/* Content */}
+                  {/* Title + client */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="text-sm font-semibold text-text-primary truncate">{item.title}</h3>
-                      <span className={clsx('text-[9px] font-bold px-2 py-0.5 rounded-full border', type.color)}>
-                        {type.label}
-                      </span>
-                    </div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-text-muted">{item.client_name}</span>
+                      <span className={clsx('text-[9px] font-bold px-2 py-0.5 rounded-full border flex-shrink-0', typeCfg.color)}>{typeCfg.label}</span>
+                      <h3 className="text-sm font-semibold text-text-primary truncate">{item.title}</h3>
+                      <span className="text-xs text-text-muted flex-shrink-0">{item.client_name}</span>
                       {item.business_name && (
-                        <span className="flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-accent-50 text-accent-700 border border-accent-100">
+                        <span className="flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-accent-50 text-accent-700 border border-accent-100 flex-shrink-0">
                           <Briefcase className="w-2.5 h-2.5" />{item.business_name}
                         </span>
                       )}
-                      <span className="text-xs text-text-muted">&middot;</span>
-                      <span className="text-xs text-text-muted">{completedTasks}/{item.tasks.length} tasks</span>
                     </div>
                   </div>
 
-                  {/* Meta */}
-                  <div className="flex items-center gap-3">
-                    <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full', priority.color)}>
-                      {priority.label}
-                    </span>
-                    <div className={clsx('flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium', status.bg, status.color)}>
-                      <StatusIcon className="w-3.5 h-3.5" />
-                      {status.label}
+                  {/* Meta badges + actions */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full hidden sm:block', priorityCfg.color)}>{priorityCfg.label}</span>
+                    <div className={clsx('flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium', statusCfg.bg, statusCfg.color)}>
+                      <StatusIcon className="w-3 h-3" />{statusCfg.label}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {item.due_date ? new Date(item.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No date'}
-                    </div>
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-[9px] font-bold text-white">
-                      {item.assignee.split(' ').map(n => n[0]).join('')}
-                    </div>
+                    {item.due_date && (
+                      <div className="hidden md:flex items-center gap-1 text-xs text-text-muted">
+                        <Calendar className="w-3 h-3" />
+                        {new Date(item.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </div>
+                    )}
+                    <span className="text-xs text-text-muted">{completedTasks}/{item.tasks.length}</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); setAddingTaskFor(addingTaskFor === item.id ? null : item.id); setNewTaskTitle(''); setNewTaskAssignee(''); setNewTaskStatus('not-started'); }}
+                      className="flex items-center gap-1 text-[10px] font-semibold text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 px-2 py-1 rounded-lg transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />Task
+                    </button>
                     <div className="relative">
-                      <button className="p-1 hover:bg-surface-hover rounded" onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === item.id ? null : item.id); }}>
+                      <button className="p-1 hover:bg-surface-hover rounded" onClick={e => { e.stopPropagation(); setActiveMenu(activeMenu === item.id ? null : item.id); }}>
                         <MoreHorizontal className="w-4 h-4 text-text-muted" />
                       </button>
                       {activeMenu === item.id && (
@@ -590,127 +558,82 @@ export default function WorkPage() {
                   </div>
                 </div>
 
-                {/* Expanded Task List */}
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                      className="overflow-hidden"
-                    >
-                      <div className="px-4 pb-4 pt-0 border-t border-border-light">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                          {/* Tasks */}
-                          <div>
-                            <div className="flex items-center justify-between mb-3">
-                              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Tasks</h4>
-                              <button
-                                onClick={e => { e.stopPropagation(); setAddingTaskFor(addingTaskFor === item.id ? null : item.id); setNewTaskTitle(''); setNewTaskAssignee(''); }}
-                                className="flex items-center gap-1 text-[10px] font-semibold text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 px-2 py-1 rounded-lg transition-colors"
-                              >
-                                <Plus className="w-3 h-3" />Add Task
-                              </button>
-                            </div>
-                            <AnimatePresence>
-                              {addingTaskFor === item.id && (
-                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                                  className="mb-3 overflow-hidden">
-                                  <div className="flex gap-2 p-3 bg-primary-50/50 rounded-xl border border-primary-100" onClick={e => e.stopPropagation()}>
-                                    <input type="text" placeholder="Task title..."
-                                      value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
-                                      onKeyDown={e => { if (e.key === 'Enter') handleAddTask(item.id); }}
-                                      className="flex-1 h-8 px-3 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400" />
-                                    <select value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)}
-                                      className="h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400">
-                                      <option value="">Assignee</option>
-                                      {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                                    </select>
-                                    <button onClick={() => handleAddTask(item.id)} disabled={savingTask || !newTaskTitle.trim()}
-                                      className="h-8 px-3 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors flex items-center gap-1">
-                                      {savingTask ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Save className="w-3 h-3" />Add</>}
-                                    </button>
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                            <div className="space-y-2">
-                              {item.tasks.length === 0 && addingTaskFor !== item.id && (
-                                <p className="text-xs text-text-muted text-center py-4 italic">No tasks yet — click Add Task to create one</p>
-                              )}
-                              {item.tasks.map((task, ti) => (
-                                <motion.div key={task.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ti * 0.05 }}
-                                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-hover transition-colors group/task">
-                                  <div className={clsx('w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer',
-                                    task.completed ? 'bg-success border-success' : 'border-border hover:border-primary-400')}
-                                    onClick={e => { e.stopPropagation(); updateTaskCompletion(task.id, item.id, !task.completed); }}>
-                                    {task.completed && (
-                                      <motion.svg initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-                                        className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                        <motion.path d="M20 6L9 17l-5-5" />
-                                      </motion.svg>
-                                    )}
-                                  </div>
-                                  <span className={clsx('text-sm flex-1', task.completed ? 'text-text-muted line-through' : 'text-text-primary')}>
-                                    {task.title}
-                                  </span>
-                                  {task.assignee && (
-                                    <span className="text-[10px] text-text-muted bg-surface-hover px-2 py-0.5 rounded-full">{task.assignee}</span>
-                                  )}
-                                  <button onClick={e => { e.stopPropagation(); deleteTask(task.id); }}
-                                    className="opacity-0 group-hover/task:opacity-100 transition-opacity p-1 hover:bg-danger/10 rounded">
-                                    <Trash2 className="w-3 h-3 text-danger" />
-                                  </button>
-                                </motion.div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Details */}
-                          <div>
-                            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Details</h4>
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between py-2 border-b border-border-light">
-                                <span className="text-xs text-text-muted">Amount Charged</span>
-                                <span className="text-sm font-semibold text-text-primary">${item.budget.toLocaleString()}</span>
-                              </div>
-                              <div className="flex items-center justify-between py-2 border-b border-border-light">
-                                <span className="text-xs text-text-muted">Time Spent</span>
-                                <span className="text-sm font-semibold text-text-primary">{item.time_spent}h</span>
-                              </div>
-                              {item.budget > 0 && item.time_spent > 0 && (
-                                <div className="flex items-center justify-between py-2 border-b border-border-light">
-                                  <span className="text-xs text-text-muted">Effective $/hr</span>
-                                  <span className={clsx('text-sm font-bold', (item.budget / item.time_spent) >= 75 ? 'text-success' : 'text-warning')}>
-                                    ${(item.budget / item.time_spent).toFixed(2)}/hr
-                                  </span>
-                                </div>
-                              )}
-                              <div className="flex items-center justify-between py-2 border-b border-border-light">
-                                <span className="text-xs text-text-muted">Start Date</span>
-                                <span className="text-sm text-text-primary">{item.start_date ? new Date(item.start_date).toLocaleDateString() : '—'}</span>
-                              </div>
-                              <div className="flex items-center justify-between py-2 border-b border-border-light">
-                                <span className="text-xs text-text-muted">Due Date</span>
-                                <span className="text-sm font-semibold text-text-primary">{item.due_date ? new Date(item.due_date).toLocaleDateString() : '—'}</span>
-                              </div>
-                              <div className="flex items-center justify-between py-2">
-                                <span className="text-xs text-text-muted">Assignee</span>
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-[8px] font-bold text-white">
-                                    {item.assignee.split(' ').map(n => n[0]).join('')}
-                                  </div>
-                                  <span className="text-sm text-text-primary">{item.assignee || '—'}</span>
-                                </div>
-                              </div>
-                            </div>
+                {/* Task list (always visible) */}
+                <div className="px-4 py-2">
+                  {/* Add task form */}
+                  <AnimatePresence>
+                    {addingTaskFor === item.id && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-2 overflow-hidden">
+                        <div className="space-y-2 p-3 bg-primary-50/50 rounded-xl border border-primary-100" onClick={e => e.stopPropagation()}>
+                          <input type="text" placeholder="Task title..."
+                            value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleAddTask(item.id); }}
+                            className="w-full h-8 px-3 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400" />
+                          <div className="flex gap-2">
+                            <select value={newTaskStatus} onChange={e => setNewTaskStatus(e.target.value)}
+                              className="flex-1 h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400">
+                              <option value="not-started">Not Started</option>
+                              <option value="in-progress">In Progress</option>
+                              <option value="waiting-on-client">Waiting on Client</option>
+                              <option value="in-review">In Review</option>
+                              <option value="completed">Completed</option>
+                            </select>
+                            <select value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)}
+                              className="flex-1 h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400">
+                              <option value="">Assignee</option>
+                              {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                            </select>
+                            <button onClick={() => handleAddTask(item.id)} disabled={savingTask || !newTaskTitle.trim()}
+                              className="h-8 px-3 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors flex items-center gap-1">
+                              {savingTask ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Save className="w-3 h-3" />Add</>}
+                            </button>
                           </div>
                         </div>
-                      </div>
-                    </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Empty state */}
+                  {item.tasks.length === 0 && addingTaskFor !== item.id && (
+                    <p className="text-xs text-text-muted text-center py-3 italic">No tasks yet — click + Task to create one</p>
                   )}
-                </AnimatePresence>
+
+                  {/* Task rows */}
+                  <div className="space-y-1 pb-1">
+                    {item.tasks.map((task, ti) => {
+                      const taskStatusCfg = statusConfig[task.status] ?? statusConfig['not-started'];
+                      const TaskStatusIcon = taskStatusCfg.icon;
+                      return (
+                        <motion.div key={task.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ti * 0.05 }}
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-hover transition-colors group/task">
+                          <div className={clsx('w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer',
+                            task.completed ? 'bg-success border-success' : 'border-border hover:border-primary-400')}
+                            onClick={e => { e.stopPropagation(); updateTaskCompletion(task.id, item.id, !task.completed); }}>
+                            {task.completed && (
+                              <motion.svg initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+                                className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                <motion.path d="M20 6L9 17l-5-5" />
+                              </motion.svg>
+                            )}
+                          </div>
+                          <span className={clsx('text-sm flex-1', task.completed ? 'text-text-muted line-through' : 'text-text-primary')}>
+                            {task.title}
+                          </span>
+                          <div className={clsx('flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold flex-shrink-0', taskStatusCfg.bg, taskStatusCfg.color)}>
+                            <TaskStatusIcon className="w-3 h-3" />{taskStatusCfg.label}
+                          </div>
+                          {task.assignee && (
+                            <span className="text-[10px] text-text-muted bg-surface-hover px-2 py-0.5 rounded-full flex-shrink-0">{task.assignee}</span>
+                          )}
+                          <button onClick={e => { e.stopPropagation(); deleteTask(task.id); }}
+                            className="opacity-0 group-hover/task:opacity-100 transition-opacity p-1 hover:bg-danger/10 rounded flex-shrink-0">
+                            <Trash2 className="w-3 h-3 text-danger" />
+                          </button>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
               </motion.div>
             );
           })}

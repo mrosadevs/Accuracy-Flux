@@ -39,10 +39,12 @@ export function useNotifications() {
   // ── Portal messages ───────────────────────────────────────────────────────
   const fetchPortal = useCallback(async () => {
     if (!configured) return;
+    // Only fetch unread messages — once marked read, they disappear from notifications permanently
     const { data } = await supabase
       .from("portal_messages")
       .select("*, clients(name)")
       .eq("is_from_client", true)
+      .is("read_at", null)
       .order("created_at", { ascending: false })
       .limit(10);
     if (data) {
@@ -53,7 +55,7 @@ export function useNotifications() {
           title: `Message from ${clientName}`,
           subtitle: ((m.message as string) || "").slice(0, 60) + (((m.message as string) || "").length > 60 ? "…" : ""),
           time: formatAgo(m.created_at as string),
-          read: !!(m.read_at as string | null),
+          read: false,
           href: "/portals",
         };
       }));

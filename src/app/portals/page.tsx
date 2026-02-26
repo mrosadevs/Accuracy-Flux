@@ -43,6 +43,8 @@ function ClientPanel({ client }: { client: Client }) {
   const [addingTask,    setAddingTask]    = useState(false);
   const [showTaskForm,  setShowTaskForm]  = useState(false);
   const [clearingChat,  setClearingChat]  = useState(false);
+  const [clearConfirm,  setClearConfirm]  = useState(false);
+  const [clearError,    setClearError]    = useState<string | null>(null);
   const [uploadCategory, setUploadCategory] = useState('Documents for You');
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -97,10 +99,19 @@ function ClientPanel({ client }: { client: Client }) {
     }
   };
 
-  /* ── Delete file ── */
+  /* ── Delete file (staff) ── */
   const handleDeleteFile = async (id: string, filePath: string) => {
-    await supabase.storage.from('portal-documents').remove([filePath]);
-    await supabase.from('portal_documents').delete().eq('id', id);
+    // Try API route first (works for client-uploaded files); fall back to direct staff delete
+    const res = await fetch('/api/delete-portal-document', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docId: id, filePath, clientId: client.id }),
+    });
+    if (!res.ok) {
+      // Staff has ALL policy via RLS, so direct delete works for staff-uploaded files
+      await supabase.storage.from('portal-documents').remove([filePath]);
+      await supabase.from('portal_documents').delete().eq('id', id);
+    }
     refetch();
   };
 
@@ -177,25 +188,47 @@ function ClientPanel({ client }: { client: Client }) {
           <div className="flex flex-col h-full" style={{ minHeight: 400 }}>
             {/* Clear chat button */}
             {messages.length > 0 && (
-              <div className="flex justify-end mb-2">
-                <button
-                  onClick={async () => {
-                    if (!confirm(`Clear all messages with ${client.name}? This cannot be undone.`)) return;
-                    setClearingChat(true);
-                    try {
-                      await clearMessages(client.id);
-                    } catch (err) {
-                      alert(`Failed to clear messages: ${err instanceof Error ? err.message : 'Unknown error'}`);
-                    } finally {
-                      setClearingChat(false);
-                    }
-                  }}
-                  disabled={clearingChat}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-text-muted hover:text-danger hover:bg-danger/5 transition-colors disabled:opacity-40"
-                >
-                  {clearingChat ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eraser className="w-3 h-3" />}
-                  Clear conversation
-                </button>
+              <div className="flex flex-col items-end gap-1 mb-2">
+                {clearError && (
+                  <p className="text-[10px] text-danger font-medium px-1">{clearError}</p>
+                )}
+                {clearConfirm ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-text-muted">Clear all messages?</span>
+                    <button
+                      onClick={async () => {
+                        setClearConfirm(false);
+                        setClearError(null);
+                        setClearingChat(true);
+                        try {
+                          await clearMessages(client.id);
+                        } catch (err) {
+                          setClearError(err instanceof Error ? err.message : 'Failed to clear');
+                        } finally {
+                          setClearingChat(false);
+                        }
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-danger text-white hover:bg-danger/90 transition-colors"
+                    >
+                      Yes, clear
+                    </button>
+                    <button
+                      onClick={() => { setClearConfirm(false); setClearError(null); }}
+                      className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-border text-text-muted hover:bg-surface-hover transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setClearConfirm(true); setClearError(null); }}
+                    disabled={clearingChat}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-text-muted hover:text-danger hover:bg-danger/5 transition-colors disabled:opacity-40"
+                  >
+                    {clearingChat ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eraser className="w-3 h-3" />}
+                    Clear conversation
+                  </button>
+                )}
               </div>
             )}
             <div className="flex-1 space-y-3 mb-4 overflow-y-auto">

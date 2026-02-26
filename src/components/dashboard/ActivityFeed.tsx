@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useSupabase, isSupabaseConfigured } from '@/lib/hooks/use-supabase';
 import { CheckCircle2, FileText, MessageSquare, Briefcase, Clock } from 'lucide-react';
@@ -14,21 +14,20 @@ interface Activity {
   project: string | null;
   type: 'task' | 'work' | 'document' | 'email';
   created_at: string;
-  color: string;
 }
 
 const typeIcons = {
-  task: CheckCircle2,
+  task:     CheckCircle2,
   document: FileText,
-  email: MessageSquare,
-  work: Briefcase,
+  email:    MessageSquare,
+  work:     Briefcase,
 };
 
 const typeColors = {
-  task: 'text-success bg-success/10',
+  task:     'text-success bg-success/10',
   document: 'text-accent-600 bg-accent-400/10',
-  email: 'text-primary-600 bg-primary-100',
-  work: 'text-pink-500 bg-pink-500/10',
+  email:    'text-primary-600 bg-primary-100',
+  work:     'text-pink-500 bg-pink-500/10',
 };
 
 function timeAgo(dateStr: string) {
@@ -47,27 +46,87 @@ export default function ActivityFeed() {
   const [loading, setLoading] = useState(true);
   const configured = isSupabaseConfigured();
 
-  useEffect(() => {
+  const fetchActivities = useCallback(async () => {
     if (!configured) { setLoading(false); return; }
-    supabase
-      .from('activities')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(10)
-      .then(({ data }) => {
-        setActivities((data ?? []).map((a: Record<string, unknown>) => ({
-          id: a.id as string,
-          user_name: (a.user_name as string) ?? 'Someone',
-          action: a.action as string,
-          target: a.target as string | null,
-          project: a.project as string | null,
-          type: (a.type as 'task' | 'work' | 'document' | 'email') ?? 'work',
-          created_at: a.created_at as string,
-          color: '#3b82f6',
-        })));
-        setLoading(false);
+
+    const [{ data: msgs }, { data: workItems }, { data: timeEntries }] = await Promise.all([
+      supabase
+        .from('portal_messages')
+        .select('id, sender_name, message, created_at, clients(name)')
+        .eq('is_from_client', true)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      supabase
+        .from('work_items')
+        .select('id, title, client_name, assignee, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5),
+      supabase
+        .from('time_entries')
+        .select('id, description, hours, created_at, profiles(name)')
+        .order('created_at', { ascending: false })
+        .limit(5),
+    ]);
+
+    const items: Activity[] = [];
+
+    (msgs ?? []).forEach((m: Record<string, unknown>) => {
+      const clientName = (m.clients as { name?: string } | null)?.name ?? 'a client';
+      items.push({
+        id: `msg_${m.id as string}`,
+        user_name: (m.sender_name as string) ?? 'Client',
+        action: 'sent a message',
+        target: clientName,
+        project: null,
+        type: 'email',
+        created_at: m.created_at as string,
       });
+    });
+
+    (workItems ?? []).forEach((w: Record<string, unknown>) => {
+      items.push({
+        id: `wi_${w.id as string}`,
+        user_name: (w.assignee as string) || 'Staff',
+        action: 'created work item',
+        target: w.title as string,
+        project: (w.client_name as string) || null,
+        type: 'work',
+        created_at: w.created_at as string,
+      });
+    });
+
+    (timeEntries ?? []).forEach((t: Record<string, unknown>) => {
+      const desc = (t.description as string | null)?.trim();
+      const hrs = t.hours as number;
+      if (!desc || !hrs) return;
+      const userName = (t.profiles as { name?: string } | null)?.name ?? 'Staff';
+      items.push({
+        id: `te_${t.id as string}`,
+        user_name: userName,
+        action: `logged ${hrs}h`,
+        target: desc,
+        project: null,
+        type: 'task',
+        created_at: t.created_at as string,
+      });
+    });
+
+    items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    setActivities(items.slice(0, 10));
+    setLoading(false);
   }, [supabase, configured]);
+
+  useEffect(() => {
+    fetchActivities();
+    if (!configured) return;
+    const ch = supabase
+      .channel('activity-feed')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'portal_messages' }, fetchActivities)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'work_items' }, fetchActivities)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'time_entries' }, fetchActivities)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [fetchActivities, supabase, configured]);
 
   return (
     <motion.div
@@ -103,7 +162,7 @@ export default function ActivityFeed() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.6 + i * 0.07 }}
-                className="flex items-start gap-3 py-3 border-b border-border-light last:border-0 group hover:bg-surface-hover/50 -mx-2 px-2 rounded-lg transition-colors cursor-pointer"
+                className="flex items-start gap-3 py-3 border-b border-border-light last:border-0 group hover:bg-surface-hover/50 -mx-2 px-2 rounded-lg transition-colors"
               >
                 <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0', typeColors[activity.type])}>
                   <Icon className="w-4 h-4" />

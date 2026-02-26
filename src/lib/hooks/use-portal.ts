@@ -75,17 +75,17 @@ export function usePortal(clientId?: string) {
   }
 
   async function deleteDocument(docId: string, filePath: string) {
-    if (!configured) return;
-    // Safety guard: only allow deleting files the client uploaded (uploaded_by IS NULL)
-    const { data: docRecord } = await supabase
-      .from('portal_documents')
-      .select('uploaded_by')
-      .eq('id', docId)
-      .single();
-    if (!docRecord || docRecord.uploaded_by !== null) return; // silently refuse staff files
-    await supabase.storage.from('portal-documents').remove([filePath]);
-    // Double guard: .is('uploaded_by', null) ensures DB delete only applies to client files
-    await supabase.from('portal_documents').delete().eq('id', docId).is('uploaded_by', null);
+    if (!configured || !clientId) return;
+    // Use service-role API route to bypass RLS (same pattern as delete-portal-messages)
+    const res = await fetch('/api/delete-portal-document', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docId, filePath, clientId }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? `Failed (${res.status})`);
+    }
     await fetchData();
   }
 

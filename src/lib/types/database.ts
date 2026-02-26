@@ -73,6 +73,7 @@ export interface Database {
           work_item_id: string;
           title: string;
           completed: boolean;
+          status: string;
           assignee_id: string | null;
           assignee: string | null;
           due_date: string | null;

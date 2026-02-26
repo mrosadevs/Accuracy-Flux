@@ -62,13 +62,21 @@ export function useWorkItems() {
 
   async function updateTaskCompletion(taskId: string, workItemId: string, completed: boolean) {
     if (!configured) return;
-    await supabase.from("tasks").update({ completed }).eq("id", taskId);
+    const newStatus = completed ? 'completed' : 'not-started';
+    await supabase.from("tasks").update({ completed, status: newStatus }).eq("id", taskId);
     const workItem = workItems.find(w => w.id === workItemId);
     if (workItem) {
       const allTasks = workItem.tasks.map(t => t.id === taskId ? { ...t, completed } : t);
       const done = allTasks.filter(t => t.completed).length;
       const progress = allTasks.length > 0 ? Math.round((done / allTasks.length) * 100) : 0;
-      await supabase.from("work_items").update({ progress }).eq("id", workItemId);
+      if (allTasks.length > 0 && done === allTasks.length) {
+        // All tasks done → auto-complete work item
+        await supabase.from("work_items").update({ progress: 100, status: 'completed' }).eq("id", workItemId);
+      } else {
+        // Un-checking a task: if work item was completed, revert to in-progress
+        const workItemStatus = workItem.status === 'completed' && !completed ? 'in-progress' : undefined;
+        await supabase.from("work_items").update({ progress, ...(workItemStatus ? { status: workItemStatus } : {}) }).eq("id", workItemId);
+      }
     }
     await fetchWorkItems();
   }
@@ -112,16 +120,18 @@ export function useWorkItems() {
     await fetchWorkItems();
   }
 
-  async function addTask(workItemId: string, title: string, assignee?: string, assigneeId?: string, dueDate?: string) {
+  async function addTask(workItemId: string, title: string, assignee?: string, assigneeId?: string, dueDate?: string, status?: string) {
     if (!configured) return null;
     const workItem = workItems.find(w => w.id === workItemId);
     const sortOrder = workItem ? workItem.tasks.length : 0;
+    const resolvedStatus = status ?? 'not-started';
     const { data, error } = await supabase
       .from("tasks")
       .insert({
         work_item_id: workItemId,
         title: title.trim(),
-        completed: false,
+        completed: resolvedStatus === 'completed',
+        status: resolvedStatus,
         assignee: assignee ?? null,
         assignee_id: assigneeId ?? null,
         due_date: dueDate ?? null,

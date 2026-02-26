@@ -18,19 +18,23 @@ export default function DashboardPage() {
   const { invoices } = useInvoices();
   const { hoursThisWeek } = useTimeEntries();
 
-  const activeClients = clients.filter(c => c.status === 'active').length;
-  const workInProgress = workItems.filter(w => w.status === 'in-progress').length;
+  // Count all non-inactive clients (active, onboarding, or any other live status)
+  const activeClients = clients.filter(c => c.status !== 'inactive').length;
+  // Count all open work items (anything not completed)
+  const workInProgress = workItems.filter(w => w.status !== 'completed').length;
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  // Revenue = all non-draft invoices issued this month (sent, paid, or overdue)
+  const billableStatuses = ['paid', 'sent', 'overdue'];
   const revenueThisMonth = invoices
-    .filter(i => i.status === 'paid' && i.paid_at && i.paid_at >= monthStart)
+    .filter(i => billableStatuses.includes(i.status) && i.issued_date >= monthStart)
     .reduce((s, i) => s + i.amount, 0);
 
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
   const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
   const revenueLastMonth = invoices
-    .filter(i => i.status === 'paid' && i.paid_at && i.paid_at >= lastMonthStart && i.paid_at <= lastMonthEnd)
+    .filter(i => billableStatuses.includes(i.status) && i.issued_date >= lastMonthStart && i.issued_date <= lastMonthEnd)
     .reduce((s, i) => s + i.amount, 0);
 
   const revenueGrowth = revenueLastMonth > 0
@@ -52,7 +56,7 @@ export default function DashboardPage() {
             format="currency"
             delay={0.05}
           />
-          <StatCard title="Work In Progress" value={workInProgress} icon={Briefcase} color="purple" delay={0.1} />
+          <StatCard title="Open Work Items" value={workInProgress} icon={Briefcase} color="purple" delay={0.1} />
           <StatCard title="Hours This Week" value={Math.round(hoursThisWeek * 10) / 10} icon={Clock} color="pink" delay={0.15} />
         </div>
 

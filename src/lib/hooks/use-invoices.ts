@@ -28,7 +28,13 @@ export function useInvoices(clientId?: string) {
 
   useEffect(() => {
     fetchInvoices();
-  }, [fetchInvoices]);
+    if (!configured) return;
+    const channel = supabase
+      .channel('invoices-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, fetchInvoices)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchInvoices, supabase, configured]);
 
   async function createInvoice(input: {
     client_id: string;
