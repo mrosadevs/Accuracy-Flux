@@ -183,6 +183,13 @@ export function useBoard(boardId?: string) {
     await fetchBoard();
   }
 
+  // ─── Assign task to a team member ───────────────────────────────────────────
+  async function assignTask(taskId: string, assignee: string | null, assigneeId: string | null) {
+    if (!configured) return;
+    await supabase.from("tasks").update({ assignee, assignee_id: assigneeId }).eq("id", taskId);
+    await fetchBoard();
+  }
+
   // ─── Complete task (with auto-advance + auto-label logic) ──────────────────
   async function completeTask(taskId: string, workItemId: string, completed: boolean, taskStatus?: string) {
     if (!configured) return;
@@ -301,6 +308,7 @@ export function useBoard(boardId?: string) {
     deleteCard,
     addTask,
     deleteTask,
+    assignTask,
     completeTask,
     addTag,
     removeTag,

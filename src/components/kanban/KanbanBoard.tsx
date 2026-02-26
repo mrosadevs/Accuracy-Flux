@@ -18,7 +18,7 @@ import { useKanban } from '@/lib/hooks/use-kanban';
 import type { WorkItem, Task } from '@/lib/types/database';
 import type { BusinessEntity, EntityType } from '@/lib/types/database';
 import { useClients } from '@/lib/hooks/use-clients';
-import { useTeamMembers } from '@/lib/hooks/use-profile';
+import { useTeamMembers, type Profile } from '@/lib/hooks/use-profile';
 import { getDefaultDeadline, ENTITY_TYPE_SHORT } from '@/lib/utils/tax-deadlines';
 import { getMatchingTemplates } from '@/lib/templates/staff-templates';
 
@@ -90,7 +90,7 @@ function isDueSoon(d?: string | null) {
 
 function CardDetailPanel({
   card, columns, onClose, onUpdate, onCompleteTask, onAddTask, onDeleteTask,
-  onMoveColumn, onAddTag, onRemoveTag,
+  onMoveColumn, onAddTag, onRemoveTag, onAssignTask,
 }: {
   card: WorkItemCard;
   columns: BoardColumn[];
@@ -102,6 +102,7 @@ function CardDetailPanel({
   onMoveColumn: (colId: string) => Promise<void>;
   onAddTag: (tag: string) => Promise<void>;
   onRemoveTag: (tag: string) => Promise<void>;
+  onAssignTask: (taskId: string, assigneeId: string | null, assigneeName: string | null) => Promise<void>;
 }) {
   const { clients } = useClients();
   const { members } = useTeamMembers();
@@ -280,28 +281,15 @@ function CardDetailPanel({
             </div>
           )}
 
-          {/* Due date + Assignee */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-text-muted font-medium block mb-1">Due Date</label>
-              <input
-                type="date"
-                value={card.due_date ?? ''}
-                onChange={e => onUpdate({ due_date: e.target.value || null })}
-                className="w-full h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-text-muted font-medium block mb-1">Assignee</label>
-              <select
-                value={card.assignee ?? ''}
-                onChange={e => onUpdate({ assignee: e.target.value })}
-                className="w-full h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all"
-              >
-                <option value="">Unassigned</option>
-                {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-              </select>
-            </div>
+          {/* Due Date (full width — assignee is per-task, not per card) */}
+          <div>
+            <label className="text-xs text-text-muted font-medium block mb-1">Due Date</label>
+            <input
+              type="date"
+              value={card.due_date ?? ''}
+              onChange={e => onUpdate({ due_date: e.target.value || null })}
+              className="w-full h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all"
+            />
           </div>
 
           {/* Budget */}
@@ -446,6 +434,8 @@ function CardDetailPanel({
                   task={task}
                   onComplete={(completed, status) => onCompleteTask(task.id, completed, status)}
                   onDelete={() => onDeleteTask(task.id)}
+                  onAssign={(assigneeId, assigneeName) => onAssignTask(task.id, assigneeId, assigneeName)}
+                  teamMembers={members}
                 />
               ))}
             </div>
@@ -492,13 +482,20 @@ function CardDetailPanel({
 }
 
 /* ─── Task Row ─────────────────────────────────────────────────────────────── */
-function TaskRow({ task, onComplete, onDelete }: {
+function TaskRow({ task, onComplete, onDelete, onAssign, teamMembers }: {
   task: Task;
   onComplete: (completed: boolean, status?: string) => void;
   onDelete: () => void;
+  onAssign: (assigneeId: string | null, assigneeName: string | null) => void;
+  teamMembers: Profile[];
 }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [showAssignPicker, setShowAssignPicker] = useState(false);
   const isWaiting = task.status === 'waiting-on-client';
+
+  const assignedMember = task.assignee_id
+    ? teamMembers.find(m => m.id === task.assignee_id)
+    : null;
 
   return (
     <div className={clsx('group flex items-start gap-2 p-2 rounded-lg transition-colors', isWaiting ? 'bg-amber-50' : 'hover:bg-surface-hover/60')}>
@@ -518,6 +515,56 @@ function TaskRow({ task, onComplete, onDelete }: {
         {task.title}
         {isWaiting && <span className="ml-1.5 text-[10px] font-semibold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">Waiting</span>}
       </span>
+
+      {/* Per-task assignee avatar / picker */}
+      <div className="relative flex-shrink-0">
+        <button
+          onClick={() => setShowAssignPicker(!showAssignPicker)}
+          title={assignedMember ? `Assigned to ${assignedMember.name}` : 'Assign to…'}
+          className={clsx(
+            'w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold transition-all',
+            assignedMember
+              ? 'ring-1 ring-white text-white'
+              : 'border border-dashed border-text-muted/30 text-text-muted/40 opacity-0 group-hover:opacity-100 hover:border-primary-400 hover:text-primary-400'
+          )}
+          style={assignedMember ? { backgroundColor: assignedMember.color ?? '#3b82f6' } : undefined}
+        >
+          {assignedMember
+            ? (assignedMember.initials ?? assignedMember.name.split(' ').map(n => n[0]).join('').slice(0, 2))
+            : <User className="w-3 h-3" />
+          }
+        </button>
+        {showAssignPicker && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setShowAssignPicker(false)} />
+            <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl border border-border shadow-xl overflow-hidden z-30">
+              <p className="px-3 py-1.5 text-[10px] font-semibold text-text-muted uppercase tracking-wider border-b border-border">Assign task to</p>
+              {teamMembers.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => { setShowAssignPicker(false); onAssign(m.id, m.name); }}
+                  className={clsx('w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-surface-hover transition-colors', task.assignee_id === m.id ? 'bg-primary-50 text-primary-700' : 'text-text-primary')}
+                >
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0" style={{ backgroundColor: m.color ?? '#3b82f6' }}>
+                    {m.initials ?? m.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                  </div>
+                  {m.name}
+                  {task.assignee_id === m.id && <Check className="w-3 h-3 ml-auto text-primary-500" />}
+                </button>
+              ))}
+              {task.assignee_id && (
+                <button
+                  onClick={() => { setShowAssignPicker(false); onAssign(null, null); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-muted hover:bg-surface-hover transition-colors border-t border-border"
+                >
+                  <X className="w-3.5 h-3.5" />Unassign
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
       <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
         <button onClick={() => setShowMenu(!showMenu)} className="p-0.5 hover:bg-surface-hover rounded">
           <MoreHorizontal className="w-3.5 h-3.5 text-text-muted" />
@@ -686,7 +733,6 @@ function NewCardModal({ columns, defaultColumnId, onClose, onSave }: {
   const [type, setType] = useState<WorkItem['type']>('tax-return');
   const [priority, setPriority] = useState<WorkItem['priority']>('medium');
   const [dueDate, setDueDate] = useState('');
-  const [assignee, setAssignee] = useState('');
   const [budget, setBudget] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -714,7 +760,6 @@ function NewCardModal({ columns, defaultColumnId, onClose, onSave }: {
         client_name: selectedClient?.name ?? '',
         business_name: businessName || null,
         type, priority,
-        assignee: assignee || '',
         due_date: dueDate || null,
         budget: parseFloat(budget) || 0,
       });
@@ -800,22 +845,12 @@ function NewCardModal({ columns, defaultColumnId, onClose, onSave }: {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Assignee</label>
-              <select value={assignee} onChange={e => setAssignee(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400">
-                <option value="">Unassigned</option>
-                {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Budget ($)</label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
-                <input type="number" placeholder="0.00" value={budget} onChange={e => setBudget(e.target.value)} min="0" step="0.01"
-                  className="w-full h-10 pl-8 pr-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400" />
-              </div>
+          <div>
+            <label className="text-xs font-semibold text-text-secondary mb-1.5 block">Budget ($)</label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+              <input type="number" placeholder="0.00" value={budget} onChange={e => setBudget(e.target.value)} min="0" step="0.01"
+                className="w-full h-10 pl-8 pr-3 text-sm bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400" />
             </div>
           </div>
           <div className="flex gap-3 pt-1">
@@ -978,31 +1013,21 @@ function BoardCard({ card, index, onOpen, onDelete }: {
               </div>
             )}
 
-            {/* Footer: tasks count + due date + assignee */}
-            <div className="flex items-center justify-between pt-2 border-t border-border/50">
-              <div className="flex items-center gap-2.5">
-                {totalTasks > 0 && (
-                  <div className="flex items-center gap-1 text-[10px] text-text-muted">
-                    <div className={clsx('w-3 h-3 rounded border flex items-center justify-center text-[7px]', completedTasks === totalTasks ? 'border-success text-success' : 'border-text-muted/30')}>
-                      {completedTasks === totalTasks ? '✓' : ''}
-                    </div>
-                    {completedTasks}/{totalTasks}
+            {/* Footer: tasks count + due date */}
+            <div className="flex items-center gap-2.5 pt-2 border-t border-border/50">
+              {totalTasks > 0 && (
+                <div className="flex items-center gap-1 text-[10px] text-text-muted">
+                  <div className={clsx('w-3 h-3 rounded border flex items-center justify-center text-[7px]', completedTasks === totalTasks ? 'border-success text-success' : 'border-text-muted/30')}>
+                    {completedTasks === totalTasks ? '✓' : ''}
                   </div>
-                )}
-                {card.due_date && (
-                  <div className={clsx('flex items-center gap-1 text-[10px] font-medium', overdue ? 'text-danger' : dueSoon ? 'text-warning' : 'text-text-muted')}>
-                    <Calendar className="w-3 h-3" />
-                    {formatDate(card.due_date)}
-                    {overdue && <span className="text-[8px] font-bold bg-danger/10 text-danger px-1 rounded">OVERDUE</span>}
-                  </div>
-                )}
-              </div>
-              {card.assignee && (
-                <div
-                  title={card.assignee}
-                  className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-[8px] font-bold text-white ring-2 ring-white flex-shrink-0"
-                >
-                  {card.assignee.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                  {completedTasks}/{totalTasks}
+                </div>
+              )}
+              {card.due_date && (
+                <div className={clsx('flex items-center gap-1 text-[10px] font-medium', overdue ? 'text-danger' : dueSoon ? 'text-warning' : 'text-text-muted')}>
+                  <Calendar className="w-3 h-3" />
+                  {formatDate(card.due_date)}
+                  {overdue && <span className="text-[8px] font-bold bg-danger/10 text-danger px-1 rounded">OVERDUE</span>}
                 </div>
               )}
             </div>
@@ -1054,11 +1079,6 @@ function ListRow({ card, column, onOpen, onDelete }: {
             {formatDate(card.due_date)}
           </span>
         )}
-        {card.assignee && (
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-[8px] font-bold text-white ring-2 ring-white">
-            {card.assignee.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-          </div>
-        )}
         <div className="relative">
           <button onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }} className="p-1 rounded hover:bg-surface-hover opacity-0 group-hover:opacity-100 transition-opacity">
             <MoreHorizontal className="w-3.5 h-3.5 text-text-muted" />
@@ -1089,7 +1109,7 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
   const {
     columns, loading,
     moveCard, addCard, updateCard, deleteCard,
-    addTask, deleteTask, completeTask,
+    addTask, deleteTask, assignTask, completeTask,
     addTag, removeTag,
     addColumn, editColumn, deleteColumn,
   } = useBoard(boardId);
@@ -1183,6 +1203,7 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
             onMoveColumn={colId => moveCard(selectedCard.id, colId)}
             onAddTag={tag => addTag(selectedCard.id, tag)}
             onRemoveTag={tag => removeTag(selectedCard.id, tag)}
+            onAssignTask={(taskId, assigneeId, assigneeName) => assignTask(taskId, assigneeName, assigneeId)}
           />
         )}
         {deleteTarget && (
