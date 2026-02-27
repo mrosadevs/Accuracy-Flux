@@ -820,7 +820,7 @@ function TaskRow({ task, onComplete, onDelete, onAssign, teamMembers }: {
             'w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold transition-all',
             assignedMember
               ? 'ring-1 ring-white text-white'
-              : 'border border-dashed border-text-muted/40 text-text-muted/50 hover:border-primary-400 hover:text-primary-400'
+              : 'border border-dashed border-primary-400 text-primary-400 hover:bg-primary-50'
           )}
           style={assignedMember ? { backgroundColor: assignedMember.color ?? '#3b82f6' } : undefined}
         >
