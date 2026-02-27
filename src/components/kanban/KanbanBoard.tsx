@@ -296,11 +296,12 @@ function CardDetailPanel({
   const [tagSearch, setTagSearch] = useState('');
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const tagDropdownRef = useRef<HTMLDivElement>(null);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() =>
-    new Set(card.tasks.map(t => t.business_name ?? '__none__'))
-  );
+  // collapsedGroups tracks which entity sections the user has manually closed.
+  // Empty set = all sections open (default). This avoids needing to know entity
+  // names at useState init time (bizEntities isn't available yet at that point).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   function toggleGroup(key: string) {
-    setExpandedGroups(prev => {
+    setCollapsedGroups(prev => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
@@ -317,23 +318,51 @@ function CardDetailPanel({
     ? (bizEntities.find(b => b.name === card.business_name)?.entity_type ?? null)
     : null;
 
-  // Group tasks by business_name (entity). All groups start expanded.
+  // Group tasks by entity. Always shows a section per entity so companies
+  // are visible even before add_tasks_v2.sql has been run.
   const taskGroups = (() => {
-    const seen = new Map<string | null, Task[]>();
-    for (const task of card.tasks) {
-      const key = task.business_name ?? null;
-      if (!seen.has(key)) seen.set(key, []);
-      seen.get(key)!.push(task);
+    type Group = { name: string | null; entityType: EntityType | null; tasks: Task[] };
+    const result: Group[] = [];
+
+    if (bizEntities.length === 0) {
+      // Individual client — flat list, no section header
+      return [{ name: null, entityType: null, tasks: card.tasks }];
     }
-    // Order: entity order from bizEntities, then null group last
-    const result: { name: string | null; entityType: EntityType | null; tasks: Task[] }[] = [];
-    for (const be of bizEntities) {
-      if (seen.has(be.name)) {
-        result.push({ name: be.name, entityType: be.entity_type, tasks: seen.get(be.name)! });
-        seen.delete(be.name);
+
+    // Map tasks that already have business_name assigned
+    const byBiz = new Map<string, Task[]>();
+    const unassigned: Task[] = [];
+    for (const task of card.tasks) {
+      if (task.business_name) {
+        if (!byBiz.has(task.business_name)) byBiz.set(task.business_name, []);
+        byBiz.get(task.business_name)!.push(task);
+      } else {
+        unassigned.push(task);
       }
     }
-    seen.forEach((tasks, name) => result.push({ name, entityType: null, tasks }));
+
+    // One section per entity. If all tasks are unassigned AND there's only one
+    // entity, assign them all to it (tasks pre-date the business_name migration).
+    const singleEntityFallback = bizEntities.length === 1 && unassigned.length > 0 && byBiz.size === 0;
+
+    for (const be of bizEntities) {
+      const assigned = byBiz.get(be.name) ?? [];
+      const tasks = singleEntityFallback ? [...assigned, ...unassigned] : assigned;
+      result.push({ name: be.name, entityType: be.entity_type, tasks });
+    }
+
+    // Any remaining unassigned tasks (multiple entities, pre-migration) go in a General section
+    if (!singleEntityFallback && unassigned.length > 0) {
+      result.push({ name: null, entityType: null, tasks: unassigned });
+    }
+
+    // Tasks with an unknown business_name (shouldn't normally happen)
+    byBiz.forEach((tasks, name) => {
+      if (!bizEntities.some(be => be.name === name)) {
+        result.push({ name, entityType: null, tasks });
+      }
+    });
+
     return result;
   })();
 
@@ -665,7 +694,7 @@ function CardDetailPanel({
             <div className="space-y-2">
               {taskGroups.map(group => {
                 const groupKey = group.name ?? '__none__';
-                const isExpanded = expandedGroups.has(groupKey);
+                const isExpanded = !collapsedGroups.has(groupKey);
                 const done = group.tasks.filter(t => t.completed).length;
                 const total = group.tasks.length;
                 return (
