@@ -1,13 +1,13 @@
 -- ============================================================
--- add_tasks_v2.sql
--- Deletes all existing tasks and recreates them per entity.
--- Each client entity gets its own task set with business_name set.
--- Clients with no entities get individual tasks with NULL business_name.
--- Tasks are auto-checked based on column position.
+-- add_tasks_v2.sql  (v3 — uses entity_type column on work_items)
+-- Deletes all existing tasks and recreates them per work_item.
+-- Each work_item now IS one entity (run 20260226_work_items_per_entity.sql first).
+-- Tasks are auto-checked based on the column's sort_order / phase priority.
 -- ============================================================
 
--- PREREQUISITE: run this first in Supabase SQL editor:
--- ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS business_name text;
+-- PREREQUISITES (run these first if not done already):
+--   ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS business_name text;
+--   [run 20260226_work_items_per_entity.sql to add entity_type to work_items]
 
 -- Step 1: Wipe all existing tasks
 DELETE FROM public.tasks;
@@ -308,56 +308,24 @@ tmpl(entity_type_key, phase_prio, title, task_sort) AS (
   ('non-profit', 9, 'Post 990 publicly (3-year public disclosure requirement)', 22),
   ('non-profit', 9, 'Update billing and invoice', 23),
   ('non-profit', 9, 'Archive documents securely', 24)
-),
-
--- Work items where the client HAS business entities
-work_with_entities AS (
-  SELECT
-    wi.id                         AS work_item_id,
-    COALESCE(cp.max_prio, 0)      AS max_prio,
-    (be->>'name')::text           AS business_name,
-    (be->>'entity_type')::text    AS entity_type_key
-  FROM public.work_items wi
-  LEFT JOIN col_prios cp ON cp.id = wi.column_id
-  JOIN public.clients c  ON c.id  = wi.client_id
-  CROSS JOIN LATERAL jsonb_array_elements(c.business_entities) AS be
-  WHERE c.business_entities IS NOT NULL
-    AND jsonb_array_length(c.business_entities) > 0
-),
-
--- Work items where the client has NO entities (individual client)
-work_no_entities AS (
-  SELECT
-    wi.id                     AS work_item_id,
-    COALESCE(cp.max_prio, 0)  AS max_prio,
-    NULL::text                AS business_name,
-    'individual'::text        AS entity_type_key
-  FROM public.work_items wi
-  LEFT JOIN col_prios cp ON cp.id = wi.column_id
-  JOIN public.clients c  ON c.id  = wi.client_id
-  WHERE c.business_entities IS NULL
-     OR jsonb_array_length(c.business_entities) = 0
-),
-
-all_work AS (
-  SELECT * FROM work_with_entities
-  UNION ALL
-  SELECT * FROM work_no_entities
 )
 
+-- Each work_item now has entity_type set directly — simple JOIN, no cross-product needed.
 INSERT INTO public.tasks
   (work_item_id, title, completed, status,
    assignee_id, assignee, due_date, sort_order, business_name)
 SELECT
-  aw.work_item_id,
+  wi.id                                                                        AS work_item_id,
   t.title,
-  (t.phase_prio <= aw.max_prio)                                        AS completed,
-  CASE WHEN t.phase_prio <= aw.max_prio THEN 'completed' ELSE 'not-started' END AS status,
-  NULL::uuid  AS assignee_id,
-  NULL::text  AS assignee,
-  NULL::date  AS due_date,
-  t.task_sort AS sort_order,
-  aw.business_name
-FROM all_work aw
-JOIN tmpl t ON t.entity_type_key = aw.entity_type_key
-ORDER BY aw.work_item_id, aw.business_name NULLS LAST, t.task_sort;
+  (t.phase_prio <= COALESCE(cp.max_prio, 0))                                  AS completed,
+  CASE WHEN t.phase_prio <= COALESCE(cp.max_prio, 0)
+    THEN 'completed' ELSE 'not-started' END                                    AS status,
+  NULL::uuid                                                                   AS assignee_id,
+  NULL::text                                                                   AS assignee,
+  NULL::date                                                                   AS due_date,
+  t.task_sort                                                                  AS sort_order,
+  wi.business_name
+FROM public.work_items wi
+LEFT JOIN col_prios cp ON cp.id = wi.column_id
+JOIN tmpl t ON t.entity_type_key = COALESCE(wi.entity_type, 'individual')
+ORDER BY wi.id, t.task_sort;

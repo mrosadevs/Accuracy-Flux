@@ -62,6 +62,7 @@ export interface Database {
           client_id: string | null;
           client_name: string;
           business_name: string | null;
+          entity_type: string | null;
           type: 'tax-return' | 'bookkeeping' | 'payroll' | 'advisory' | 'audit' | 'onboarding';
           status: 'not-started' | 'in-progress' | 'waiting-on-client' | 'in-review' | 'completed';
           priority: 'low' | 'medium' | 'high' | 'urgent';

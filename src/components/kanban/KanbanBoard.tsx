@@ -156,7 +156,7 @@ function TagManagerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface-primary rounded-2xl shadow-2xl border border-border w-full max-w-md mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-2xl border border-border w-full max-w-md mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
           <h2 className="text-sm font-bold text-text-primary flex items-center gap-2">
@@ -176,7 +176,7 @@ function TagManagerModal({
                 style={{ backgroundColor: newColor }}
               />
               {showNewPicker && (
-                <div className="absolute top-9 left-0 z-10 bg-surface-primary rounded-xl border border-border p-2 shadow-xl grid grid-cols-4 gap-1.5 w-32">
+                <div className="absolute top-9 left-0 z-10 bg-white rounded-xl border border-border p-2 shadow-xl grid grid-cols-4 gap-1.5 w-32">
                   {TAG_COLORS.map(c => (
                     <button key={c} onClick={() => { setNewColor(c); setShowNewPicker(false); }}
                       className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
@@ -218,7 +218,7 @@ function TagManagerModal({
                       style={{ backgroundColor: editColor }}
                     />
                     {showEditPicker && (
-                      <div className="absolute top-9 left-0 z-10 bg-surface-primary rounded-xl border border-border p-2 shadow-xl grid grid-cols-4 gap-1.5 w-32">
+                      <div className="absolute top-9 left-0 z-10 bg-white rounded-xl border border-border p-2 shadow-xl grid grid-cols-4 gap-1.5 w-32">
                         {TAG_COLORS.map(c => (
                           <button key={c} onClick={() => { setEditColor(c); setShowEditPicker(false); }}
                             className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
@@ -314,9 +314,12 @@ function CardDetailPanel({
 
   const selectedClient = clients.find(c => c.id === card.client_id) ?? null;
   const bizEntities: BusinessEntity[] = (selectedClient?.business_entities as BusinessEntity[] | null) ?? [];
-  const entityType: EntityType | null = card.business_name
-    ? (bizEntities.find(b => b.name === card.business_name)?.entity_type ?? null)
-    : null;
+  // Prefer entity_type stored directly on the work_item (new model);
+  // fall back to looking it up from business_entities (legacy / manually created cards).
+  const entityType: EntityType | null = (card.entity_type as EntityType | null)
+    ?? (card.business_name
+      ? (bizEntities.find(b => b.name === card.business_name)?.entity_type ?? null)
+      : null);
 
   // Group tasks by entity. Always shows a section per entity so companies
   // are visible even before add_tasks_v2.sql has been run.
@@ -1248,12 +1251,17 @@ function BoardCard({ card, index, onOpen, onDelete, globalTags }: {
                 : 'hover:shadow-md hover:border-primary-200'
             )}
           >
-            {/* Top row: type badge + priority dot + menu */}
+            {/* Top row: type badge + entity badge + priority dot + menu */}
             <div className="flex items-center justify-between mb-2.5">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className={clsx('text-[9px] font-bold px-1.5 py-0.5 rounded border', typeConfig[card.type]?.color)}>
                   {typeConfig[card.type]?.label}
                 </span>
+                {card.entity_type && (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200">
+                    {ENTITY_TYPE_SHORT[card.entity_type as EntityType] ?? card.entity_type}
+                  </span>
+                )}
                 <div className={clsx('w-1.5 h-1.5 rounded-full', priorityDot[card.priority])} title={priorityLabel[card.priority]} />
               </div>
               <button
