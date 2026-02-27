@@ -10,13 +10,13 @@ import { useClients } from '@/lib/hooks/use-clients';
 import { useWorkItems } from '@/lib/hooks/use-work-items';
 import { useInvoices } from '@/lib/hooks/use-invoices';
 import { useTimeEntries } from '@/lib/hooks/use-time-entries';
-import { Users, Briefcase, DollarSign, Clock } from 'lucide-react';
+import { Users, Briefcase, DollarSign, Clock, TrendingUp } from 'lucide-react';
 
 export default function DashboardPage() {
   const { clients } = useClients();
   const { workItems } = useWorkItems();
   const { invoices } = useInvoices();
-  const { hoursThisWeek } = useTimeEntries();
+  const { hoursThisWeek, hoursThisMonth } = useTimeEntries();
 
   // Count all non-inactive clients (active, onboarding, or any other live status)
   const activeClients = clients.filter(c => c.status !== 'inactive').length;
@@ -48,10 +48,15 @@ export default function DashboardPage() {
     ? Math.round(((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100)
     : 0;
 
+  // Revenue per billable hour this month (fees received ÷ hours logged)
+  const revenuePerHour = hoursThisMonth > 0
+    ? Math.round(workPaymentThisMonth / hoursThisMonth)
+    : 0;
+
   return (
     <AppShell title="Dashboard" subtitle="Welcome back! Here's what's happening today.">
       <div className="space-y-6 max-w-[1800px] mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <StatCard title="Active Clients" value={activeClients} icon={Users} color="blue" delay={0} />
           <StatCard
             title="Revenue This Month"
@@ -63,8 +68,16 @@ export default function DashboardPage() {
             format="currency"
             delay={0.05}
           />
-          <StatCard title="Open Work Items" value={workInProgress} icon={Briefcase} color="purple" delay={0.1} />
-          <StatCard title="Hours This Week" value={Math.round(hoursThisWeek * 10) / 10} icon={Clock} color="pink" delay={0.15} />
+          <StatCard
+            title="Revenue / Hour"
+            value={revenuePerHour > 0 ? `$${revenuePerHour}/hr` : '—'}
+            changeLabel="fees received ÷ hours logged"
+            icon={TrendingUp}
+            color="amber"
+            delay={0.1}
+          />
+          <StatCard title="Open Work Items" value={workInProgress} icon={Briefcase} color="purple" delay={0.15} />
+          <StatCard title="Hours This Week" value={Math.round(hoursThisWeek * 10) / 10} icon={Clock} color="pink" delay={0.2} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

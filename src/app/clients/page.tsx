@@ -642,11 +642,9 @@ export default function ClientsPage() {
                     ))}
                   </div>
                 )}
-                {client.tags?.length > 0 && (
+                {client.tags?.includes('Referral') && (
                   <div className="flex flex-wrap gap-1 mb-4">
-                    {client.tags.map(tag => (
-                      <span key={tag} className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-primary-50 text-primary-700 border border-primary-100">{tag}</span>
-                    ))}
+                    <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200">Referral</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between pt-3 border-t border-border-light">
