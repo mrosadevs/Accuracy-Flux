@@ -18,7 +18,7 @@ import type { KanbanBoard as KanbanBoardType } from '@/lib/types/database';
    Default Tax Season Columns
 ───────────────────────────────────────────────────────────────────────────── */
 const DEFAULT_SEASON_COLUMNS = [
-  { title: 'New Client',             color: '#64748b', sort_order: 0 },
+  { title: 'Clients',                color: '#64748b', sort_order: 0 },
   { title: 'Estimate Sent',          color: '#3b82f6', sort_order: 1 },
   { title: 'Estimate Approved',      color: '#8b5cf6', sort_order: 2 },
   { title: 'Waiting on Documents',   color: '#f59e0b', sort_order: 3 },
