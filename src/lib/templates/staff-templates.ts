@@ -32,7 +32,6 @@ const TAX_INDIVIDUAL: StaffTemplate = {
     { phase: 'Engagement & Setup', title: 'Send engagement letter to client' },
     { phase: 'Engagement & Setup', title: 'Obtain signed engagement letter' },
     { phase: 'Engagement & Setup', title: 'Request prior year return for comparison' },
-    { phase: 'Engagement & Setup', title: 'Set up client in tax software' },
     // Extension (complete if applicable, skip if not needed)
     { phase: 'Extension', title: 'File extension (Form 4868) with IRS' },
     { phase: 'Extension', title: 'Confirm extension accepted by IRS' },
@@ -86,7 +85,6 @@ const TAX_LLC_SINGLE: StaffTemplate = {
     // Engagement & Setup
     { phase: 'Engagement & Setup', title: 'Send engagement letter to client' },
     { phase: 'Engagement & Setup', title: 'Obtain signed engagement letter' },
-    { phase: 'Engagement & Setup', title: 'Set up client in tax software' },
     // Extension
     { phase: 'Extension', title: 'File personal extension (Form 4868) with IRS' },
     { phase: 'Extension', title: 'Confirm extension accepted by IRS' },
@@ -134,7 +132,6 @@ const TAX_1040NR: StaffTemplate = {
     { phase: 'Engagement & Setup', title: 'Send engagement letter to client' },
     { phase: 'Engagement & Setup', title: 'Obtain signed engagement letter' },
     { phase: 'Engagement & Setup', title: 'Confirm ITIN / SSN status' },
-    { phase: 'Engagement & Setup', title: 'Set up client in tax software' },
     // Extension
     { phase: 'Extension', title: 'File extension with IRS (if needed)' },
     { phase: 'Extension', title: 'Confirm extension accepted by IRS' },
