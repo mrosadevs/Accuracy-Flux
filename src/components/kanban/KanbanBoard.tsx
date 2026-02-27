@@ -279,7 +279,7 @@ function CardDetailPanel({
   onClose: () => void;
   onUpdate: (updates: Partial<WorkItem>) => Promise<void>;
   onCompleteTask: (taskId: string, completed: boolean, taskStatus?: string) => Promise<void>;
-  onAddTask: (title: string) => Promise<void>;
+  onAddTask: (title: string, businessName?: string | null) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
   onMoveColumn: (colId: string) => Promise<void>;
   onAddTag: (tag: string) => Promise<void>;
@@ -292,7 +292,6 @@ function CardDetailPanel({
   const { members } = useTeamMembers();
   const [editing, setEditing] = useState<string | null>(null);
   const [editVal, setEditVal] = useState('');
-  const [newTaskTitle, setNewTaskTitle] = useState('');
   const [tagSearch, setTagSearch] = useState('');
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const tagDropdownRef = useRef<HTMLDivElement>(null);
@@ -308,31 +307,46 @@ function CardDetailPanel({
     });
   }
   const [showMoveMenu, setShowMoveMenu] = useState(false);
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  // templateTarget: which entity the Apply Template modal is open for
+  const [templateTarget, setTemplateTarget] = useState<{ businessName: string | null; entityType: EntityType | null } | null>(null);
   const [saving, setSaving] = useState(false);
-  const taskInputRef = useRef<HTMLInputElement>(null);
+  // Per-entity task input values, keyed by entity name (or '__none__' for individuals)
+  const [entityTaskInputs, setEntityTaskInputs] = useState<Record<string, string>>({});
+  function setEntityInput(key: string, val: string) { setEntityTaskInputs(prev => ({ ...prev, [key]: val })); }
 
   const selectedClient = clients.find(c => c.id === card.client_id) ?? null;
   const bizEntities: BusinessEntity[] = (selectedClient?.business_entities as BusinessEntity[] | null) ?? [];
-  // Prefer entity_type stored directly on the work_item (new model);
-  // fall back to looking it up from business_entities (legacy / manually created cards).
-  const entityType: EntityType | null = (card.entity_type as EntityType | null)
-    ?? (card.business_name
-      ? (bizEntities.find(b => b.name === card.business_name)?.entity_type ?? null)
-      : null);
 
-  // Each card now represents exactly ONE entity (or an individual with no entity).
-  // Show all tasks under that one entity header, regardless of task.business_name.
+  // Group tasks by entity. One section per entity; unassigned tasks go to the
+  // single entity if there's only one, otherwise a generic section.
   const taskGroups = (() => {
     type Group = { name: string | null; entityType: EntityType | null; tasks: Task[] };
 
-    if (!card.business_name) {
-      // Individual — flat list, no section header
+    if (bizEntities.length === 0) {
       return [{ name: null, entityType: null, tasks: card.tasks }];
     }
 
-    // Single entity card — all tasks belong to this entity
-    return [{ name: card.business_name, entityType: entityType, tasks: card.tasks }];
+    const byBiz = new Map<string, Task[]>();
+    const unassigned: Task[] = [];
+    for (const task of card.tasks) {
+      if (task.business_name) {
+        if (!byBiz.has(task.business_name)) byBiz.set(task.business_name, []);
+        byBiz.get(task.business_name)!.push(task);
+      } else {
+        unassigned.push(task);
+      }
+    }
+
+    const result: Group[] = [];
+    const singleEntity = bizEntities.length === 1;
+    for (const be of bizEntities) {
+      const baseTasks = byBiz.get(be.name) ?? [];
+      result.push({ name: be.name, entityType: be.entity_type, tasks: singleEntity ? [...baseTasks, ...unassigned] : baseTasks });
+    }
+    if (!singleEntity && unassigned.length > 0) {
+      result.push({ name: null, entityType: null, tasks: unassigned });
+    }
+    return result;
   })();
 
   const completedTasks = card.tasks.filter(t => t.completed).length;
@@ -343,12 +357,6 @@ function CardDetailPanel({
     setSaving(true);
     try { await onUpdate({ [field]: value }); }
     finally { setSaving(false); setEditing(null); }
-  }
-
-  async function handleAddTask() {
-    if (!newTaskTitle.trim()) return;
-    await onAddTask(newTaskTitle.trim());
-    setNewTaskTitle('');
   }
 
 
@@ -395,11 +403,6 @@ function CardDetailPanel({
               <span className={clsx('text-[10px] font-semibold px-2 py-0.5 rounded-full border', typeConfig[card.type]?.color)}>
                 {typeConfig[card.type]?.label}
               </span>
-              {entityType && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  {ENTITY_TYPE_SHORT[entityType]}
-                </span>
-              )}
               <span className={clsx('flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full', priorityBg[card.priority])}>
                 <div className={clsx('w-1.5 h-1.5 rounded-full', priorityDot[card.priority])} />
                 {priorityLabel[card.priority]}
@@ -479,17 +482,6 @@ function CardDetailPanel({
               </div>
             </div>
           )}
-
-          {/* Due Date (full width — assignee is per-task, not per card) */}
-          <div>
-            <label className="text-xs text-text-muted font-medium block mb-1">Due Date</label>
-            <input
-              type="date"
-              value={card.due_date ?? ''}
-              onChange={e => onUpdate({ due_date: e.target.value || null })}
-              className="w-full h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all"
-            />
-          </div>
 
           {/* Engagement Fee */}
           <div className="flex items-center gap-2">
@@ -628,23 +620,15 @@ function CardDetailPanel({
             )}
           </div>
 
-          {/* Tasks */}
+          {/* Tasks — one collapsible work-item section per entity */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-text-secondary">Tasks</span>
-                {totalTasks > 0 && (
-                  <span className="text-[10px] text-text-muted bg-surface-hover px-2 py-0.5 rounded-full font-medium">
-                    {completedTasks}/{totalTasks}
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => setShowTemplateModal(true)}
-                className="flex items-center gap-1 text-[10px] text-primary-600 hover:underline"
-              >
-                <Sparkles className="w-3 h-3" />Apply Template
-              </button>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs font-semibold text-text-secondary">Tasks</span>
+              {totalTasks > 0 && (
+                <span className="text-[10px] text-text-muted bg-surface-hover px-2 py-0.5 rounded-full font-medium">
+                  {completedTasks}/{totalTasks}
+                </span>
+              )}
             </div>
 
             {/* Progress bar */}
@@ -666,27 +650,55 @@ function CardDetailPanel({
                 const isExpanded = !collapsedGroups.has(groupKey);
                 const done = group.tasks.filter(t => t.completed).length;
                 const total = group.tasks.length;
+                const entityInput = entityTaskInputs[groupKey] ?? '';
+                const dueDateStr = group.entityType ? getDefaultDeadline(group.entityType, 2025) : null;
+
                 return (
-                  <div key={groupKey}>
-                    {/* Entity section header — only shown when tasks have a business_name */}
-                    {group.name && (
+                  <div key={groupKey} className="rounded-xl border border-border overflow-hidden">
+                    {/* Section header */}
+                    <div className="flex items-center gap-1.5 px-3 py-2 bg-surface-hover/40 border-b border-border">
                       <button
                         onClick={() => toggleGroup(groupKey)}
-                        className="flex items-center gap-1.5 w-full py-1 px-1.5 rounded-lg hover:bg-surface-hover mb-0.5 group/gh"
+                        className="flex items-center gap-1.5 flex-1 min-w-0"
                       >
                         <ChevronRight className={clsx('w-3 h-3 text-text-muted transition-transform flex-shrink-0', isExpanded && 'rotate-90')} />
-                        <span className="text-[11px] font-semibold text-text-primary flex-1 text-left truncate">{group.name}</span>
-                        {group.entityType && (
-                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded border bg-surface-hover text-text-secondary border-border flex-shrink-0">
-                            {ENTITY_TYPE_SHORT[group.entityType]}
-                          </span>
-                        )}
-                        <span className="text-[10px] text-text-muted flex-shrink-0 ml-1">{done}/{total}</span>
+                        <span className="text-[11px] font-semibold text-text-primary truncate">
+                          {group.name ?? card.client_name ?? 'Tasks'}
+                        </span>
                       </button>
-                    )}
-                    {/* Task rows */}
+
+                      {/* Entity type badge */}
+                      {group.entityType && (
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded border bg-white text-text-secondary border-border flex-shrink-0">
+                          {ENTITY_TYPE_SHORT[group.entityType]}
+                        </span>
+                      )}
+
+                      {/* Due date */}
+                      {dueDateStr && (
+                        <span className="flex items-center gap-0.5 text-[9px] text-text-muted flex-shrink-0">
+                          <Calendar className="w-2.5 h-2.5" />
+                          {formatDate(dueDateStr)}
+                        </span>
+                      )}
+
+                      {/* Task count */}
+                      <span className="text-[10px] text-text-muted flex-shrink-0">{done}/{total}</span>
+
+                      {/* Apply Template button */}
+                      <button
+                        onClick={() => setTemplateTarget({ businessName: group.name, entityType: group.entityType })}
+                        className="flex items-center gap-0.5 text-[9px] text-primary-600 hover:text-primary-700 font-semibold flex-shrink-0 ml-0.5"
+                        title="Apply task template to this entity"
+                      >
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Template
+                      </button>
+                    </div>
+
+                    {/* Task rows + add task input */}
                     {isExpanded && (
-                      <div className={clsx('space-y-1', group.name && 'pl-3 border-l-2 border-border ml-1.5')}>
+                      <div className="px-2 py-1.5 space-y-0.5">
                         {group.tasks.map(task => (
                           <TaskRow
                             key={task.id}
@@ -697,45 +709,53 @@ function CardDetailPanel({
                             teamMembers={members}
                           />
                         ))}
+
+                        {/* Per-entity add-task input */}
+                        <div className="flex gap-1.5 pt-1.5">
+                          <input
+                            type="text"
+                            placeholder="Add a task..."
+                            value={entityInput}
+                            onChange={e => setEntityInput(groupKey, e.target.value)}
+                            onKeyDown={async e => {
+                              if (e.key === 'Enter' && entityInput.trim()) {
+                                await onAddTask(entityInput.trim(), group.name);
+                                setEntityInput(groupKey, '');
+                              }
+                            }}
+                            className="flex-1 h-7 px-2 text-xs bg-background rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted"
+                          />
+                          <button
+                            onClick={async () => {
+                              if (!entityInput.trim()) return;
+                              await onAddTask(entityInput.trim(), group.name);
+                              setEntityInput(groupKey, '');
+                            }}
+                            disabled={!entityInput.trim()}
+                            className="h-7 px-2 rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-40 text-white text-xs font-semibold transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
-
-            {/* Add task */}
-            <div className="flex gap-2 mt-3">
-              <input
-                ref={taskInputRef}
-                type="text"
-                placeholder="Add a task..."
-                value={newTaskTitle}
-                onChange={e => setNewTaskTitle(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddTask()}
-                className="flex-1 h-8 px-3 text-xs bg-background rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all placeholder:text-text-muted"
-              />
-              <button
-                onClick={handleAddTask}
-                disabled={!newTaskTitle.trim()}
-                className="h-8 px-3 rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
           </div>
         </div>
 
-        {/* Template Modal */}
+        {/* Per-entity Template Modal */}
         <AnimatePresence>
-          {showTemplateModal && (
+          {templateTarget && (
             <ApplyTemplateModal
               card={card}
-              entityType={entityType}
-              onClose={() => setShowTemplateModal(false)}
+              entityType={templateTarget.entityType}
+              onClose={() => setTemplateTarget(null)}
               onApply={async (titles) => {
-                for (const t of titles) await onAddTask(t);
-                setShowTemplateModal(false);
+                for (const t of titles) await onAddTask(t, templateTarget.businessName);
+                setTemplateTarget(null);
               }}
             />
           )}
