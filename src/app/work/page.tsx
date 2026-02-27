@@ -8,53 +8,73 @@ import { useGlobalTags } from '@/lib/hooks/use-global-tags';
 import { useTeamMembers } from '@/lib/hooks/use-profile';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, X, CheckCircle2, Circle, Clock, AlertTriangle, Play, Pause,
-  Calendar, DollarSign, ChevronDown, User, Tag, Loader2, Briefcase,
-  CheckSquare, Filter,
+  Search, X, CheckCircle2, Circle, Clock, Calendar, DollarSign,
+  Loader2, Briefcase, CheckSquare, Filter, Building2, User,
 } from 'lucide-react';
 import clsx from 'clsx';
-import type { BusinessEntity, EntityType } from '@/lib/types/database';
+import type { BusinessEntity, EntityType, Task } from '@/lib/types/database';
 import { ENTITY_TYPE_SHORT, getDefaultDeadline } from '@/lib/utils/tax-deadlines';
+
+/* ─── types ─────────────────────────────────────────────────────────────────── */
+interface EntityCard {
+  workItem: WorkItemWithTasks;
+  entityName: string | null;     // null = no entities → show as individual
+  entityType: EntityType | null;
+  deadline: string | null;
+  tasks: Task[];                 // tasks belonging to this entity only
+}
 
 /* ─── helpers ──────────────────────────────────────────────────────────────── */
 const statusConfig: Record<string, { label: string; dot: string; text: string; bg: string }> = {
-  'not-started':      { label: 'Not Started',       dot: 'bg-slate-400',    text: 'text-slate-600',   bg: 'bg-slate-50 border-slate-200' },
-  'in-progress':      { label: 'In Progress',        dot: 'bg-primary-500',  text: 'text-primary-700', bg: 'bg-primary-50 border-primary-200' },
-  'waiting-on-client':{ label: 'Waiting on Client',  dot: 'bg-amber-400',    text: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200' },
-  'in-review':        { label: 'In Review',           dot: 'bg-purple-500',   text: 'text-purple-700',  bg: 'bg-purple-50 border-purple-200' },
-  'completed':        { label: 'Completed',           dot: 'bg-green-500',    text: 'text-green-700',   bg: 'bg-green-50 border-green-200' },
+  'not-started':       { label: 'Not Started',      dot: 'bg-slate-400',   text: 'text-slate-600',   bg: 'bg-slate-50 border-slate-200' },
+  'in-progress':       { label: 'In Progress',       dot: 'bg-primary-500', text: 'text-primary-700', bg: 'bg-primary-50 border-primary-200' },
+  'waiting-on-client': { label: 'Waiting on Client', dot: 'bg-amber-400',   text: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200' },
+  'in-review':         { label: 'In Review',          dot: 'bg-purple-500',  text: 'text-purple-700',  bg: 'bg-purple-50 border-purple-200' },
+  'completed':         { label: 'Completed',          dot: 'bg-green-500',   text: 'text-green-700',   bg: 'bg-green-50 border-green-200' },
 };
 
 const ALL_STATUSES = Object.keys(statusConfig);
 
-function formatDate(d: string | null) {
+function formatDate(d: string | null | undefined) {
   if (!d) return null;
-  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Handles both YYYY-MM-DD and full ISO strings
+  const dateStr = d.length === 10 ? d : d.split('T')[0];
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function isOverdue(d: string | null) {
+function isOverdue(d: string | null | undefined) {
   if (!d) return false;
-  return new Date(d + 'T23:59:59') < new Date();
+  const dateStr = d.length === 10 ? d : d.split('T')[0];
+  return new Date(dateStr + 'T23:59:59') < new Date();
 }
 
-/* ─── Work Item Card ────────────────────────────────────────────────────────── */
-function WorkItemCard({
-  item,
-  bizEntities,
+/* ─── Entity Card component ─────────────────────────────────────────────────── */
+function EntityCardView({
+  card,
   tagColorMap,
   onClick,
+  index,
 }: {
-  item: WorkItemWithTasks;
-  bizEntities: BusinessEntity[];
+  card: EntityCard;
   tagColorMap: Record<string, string>;
   onClick: () => void;
+  index: number;
 }) {
-  const status = statusConfig[item.status] ?? statusConfig['not-started'];
-  const completedTasks = item.tasks.filter(t => t.completed).length;
-  const totalTasks = item.tasks.length;
+  const { workItem, entityName, entityType, deadline, tasks } = card;
+  const status = statusConfig[workItem.status] ?? statusConfig['not-started'];
+  const completedTasks = tasks.filter(t => t.completed).length;
+  const totalTasks = tasks.length;
   const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  const overdue = isOverdue(item.due_date);
-  const timeSpentH = item.time_spent ?? 0;
+  const overdue = isOverdue(deadline);
+  const timeSpentH = workItem.time_spent ?? 0;
+  // Proportional time for this entity
+  const totalAllTasks = workItem.tasks.length;
+  const entityTimeH = totalAllTasks > 0 && timeSpentH > 0
+    ? Math.round((tasks.length / totalAllTasks) * timeSpentH * 10) / 10
+    : 0;
+
+  const displayName = entityName ?? workItem.client_name;
+  const subtitle = entityName ? workItem.client_name : null;
 
   return (
     <motion.div
@@ -62,6 +82,7 @@ function WorkItemCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ delay: index * 0.03 }}
       whileHover={{ y: -2 }}
       onClick={onClick}
       className="bg-white rounded-2xl border border-border hover:border-primary-200 hover:shadow-lg hover:shadow-primary-500/5 p-4 cursor-pointer transition-all group"
@@ -69,9 +90,16 @@ function WorkItemCard({
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-text-primary truncate">{item.client_name}</p>
-          {item.business_name && (
-            <p className="text-[11px] text-text-muted truncate">{item.business_name}</p>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            {entityName ? (
+              <Building2 className="w-3 h-3 text-indigo-400 flex-shrink-0" />
+            ) : (
+              <User className="w-3 h-3 text-slate-400 flex-shrink-0" />
+            )}
+            <p className="text-sm font-bold text-text-primary truncate">{displayName}</p>
+          </div>
+          {subtitle && (
+            <p className="text-[11px] text-text-muted truncate pl-4">{subtitle}</p>
           )}
         </div>
         <span className={clsx('flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0', status.bg, status.text)}>
@@ -80,23 +108,22 @@ function WorkItemCard({
         </span>
       </div>
 
-      {/* Entity type pills */}
-      {bizEntities.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-3">
-          {bizEntities.slice(0, 3).map(be => (
-            <span key={be.name} className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200">
-              {ENTITY_TYPE_SHORT[be.entity_type as EntityType] ?? be.entity_type}
-            </span>
-          ))}
-          {bizEntities.length > 3 && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-surface-hover text-text-muted border-border">
-              +{bizEntities.length - 3}
+      {/* Entity type + deadline */}
+      {entityType && (
+        <div className="flex items-center gap-1.5 mb-3">
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200">
+            {ENTITY_TYPE_SHORT[entityType] ?? entityType}
+          </span>
+          {deadline && (
+            <span className={clsx('flex items-center gap-0.5 text-[10px]', overdue && workItem.status !== 'completed' ? 'text-danger font-semibold' : 'text-text-muted')}>
+              <Calendar className="w-2.5 h-2.5" />
+              {formatDate(deadline)}
             </span>
           )}
         </div>
       )}
 
-      {/* Progress bar */}
+      {/* Task progress */}
       {totalTasks > 0 && (
         <div className="mb-3">
           <div className="flex items-center justify-between mb-1">
@@ -114,46 +141,51 @@ function WorkItemCard({
         </div>
       )}
 
-      {/* Footer row */}
+      {/* No tasks yet */}
+      {totalTasks === 0 && (
+        <p className="text-[10px] text-text-muted/60 mb-3 italic">No tasks yet</p>
+      )}
+
+      {/* Footer */}
       <div className="flex items-center justify-between gap-2 text-[10px] text-text-muted">
         <div className="flex items-center gap-2">
-          {/* Due date */}
-          {item.due_date && (
-            <span className={clsx('flex items-center gap-0.5', overdue && item.status !== 'completed' ? 'text-danger font-semibold' : '')}>
+          {/* Due date (individual cards use item.due_date) */}
+          {!entityType && workItem.due_date && (
+            <span className={clsx('flex items-center gap-0.5', isOverdue(workItem.due_date) && workItem.status !== 'completed' ? 'text-danger font-semibold' : '')}>
               <Calendar className="w-2.5 h-2.5" />
-              {formatDate(item.due_date)}
+              {formatDate(workItem.due_date)}
             </span>
           )}
-          {/* Time spent — show "Completed in Xh" when all tasks done */}
-          {timeSpentH > 0 && (
+          {/* Time spent */}
+          {entityTimeH > 0 && (
             completedTasks > 0 && completedTasks === totalTasks ? (
               <span className="flex items-center gap-0.5 text-green-700 font-semibold">
                 <CheckSquare className="w-2.5 h-2.5" />
-                {timeSpentH}h total
+                {entityTimeH}h total
               </span>
             ) : (
               <span className="flex items-center gap-0.5">
                 <Clock className="w-2.5 h-2.5" />
-                {timeSpentH}h
+                {entityTimeH}h
               </span>
             )
           )}
         </div>
         <div className="flex items-center gap-1.5">
           {/* Fee */}
-          {item.budget > 0 && (
+          {workItem.budget > 0 && (
             <span className={clsx(
               'flex items-center gap-0.5 font-semibold px-1.5 py-0.5 rounded-full border',
-              item.payment_status === 'received'
+              workItem.payment_status === 'received'
                 ? 'text-green-700 bg-green-50 border-green-200'
                 : 'text-amber-700 bg-amber-50 border-amber-200'
             )}>
-              ${item.budget.toLocaleString()}
-              {item.payment_status === 'received' && <CheckCircle2 className="w-2.5 h-2.5" />}
+              ${workItem.budget.toLocaleString()}
+              {workItem.payment_status === 'received' && <CheckCircle2 className="w-2.5 h-2.5" />}
             </span>
           )}
-          {/* Labels */}
-          {(item.tags ?? []).slice(0, 2).map(tag => (
+          {/* Tags */}
+          {(workItem.tags ?? []).slice(0, 2).map(tag => (
             <span
               key={tag}
               className="px-1.5 py-0.5 rounded-full border text-[9px] font-semibold"
@@ -176,12 +208,14 @@ function WorkItemCard({
 function WorkItemEditPanel({
   item,
   bizEntities,
+  focusEntityName,
   onClose,
   onUpdate,
   onCompleteTask,
 }: {
   item: WorkItemWithTasks;
   bizEntities: BusinessEntity[];
+  focusEntityName: string | null;
   onClose: () => void;
   onUpdate: (updates: Partial<WorkItemWithTasks>) => Promise<void>;
   onCompleteTask: (taskId: string, workItemId: string, completed: boolean) => Promise<void>;
@@ -199,9 +233,11 @@ function WorkItemEditPanel({
   const totalTasks = item.tasks.length;
   const timeSpentH = item.time_spent ?? 0;
 
-  // Group tasks by business_name
+  // Group tasks by business_name, focusEntityName group first
   const taskGroups = useMemo(() => {
-    if (bizEntities.length === 0) return [{ name: null, entityType: null as EntityType | null, tasks: item.tasks }];
+    if (bizEntities.length === 0) {
+      return [{ name: null as string | null, entityType: null as EntityType | null, tasks: item.tasks }];
+    }
     const byBiz = new Map<string, typeof item.tasks>();
     const unassigned: typeof item.tasks = [];
     for (const t of item.tasks) {
@@ -212,12 +248,21 @@ function WorkItemEditPanel({
       } else { unassigned.push(t); }
     }
     const result: { name: string | null; entityType: EntityType | null; tasks: typeof item.tasks }[] = [];
-    for (const be of bizEntities) {
+
+    // Put focusEntity first
+    const orderedEntities = focusEntityName
+      ? [
+          ...bizEntities.filter(be => be.name === focusEntityName),
+          ...bizEntities.filter(be => be.name !== focusEntityName),
+        ]
+      : bizEntities;
+
+    for (const be of orderedEntities) {
       result.push({ name: be.name, entityType: be.entity_type as EntityType, tasks: byBiz.get(be.name) ?? [] });
     }
     if (unassigned.length > 0) result.push({ name: null, entityType: null, tasks: unassigned });
     return result;
-  }, [item.tasks, bizEntities]);
+  }, [item.tasks, bizEntities, focusEntityName]);
 
   return (
     <motion.div
@@ -237,7 +282,12 @@ function WorkItemEditPanel({
         <div className="flex items-start justify-between px-5 py-4 border-b border-border sticky top-0 bg-white rounded-t-2xl z-10">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-text-primary truncate">{item.client_name}</p>
-            <p className="text-[11px] text-text-muted">{item.title}</p>
+            {focusEntityName && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <Building2 className="w-3 h-3 text-indigo-400" />
+                <p className="text-[11px] text-indigo-600 font-medium">{focusEntityName}</p>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 ml-2">
             {saving && <Loader2 className="w-3.5 h-3.5 text-primary-500 animate-spin" />}
@@ -248,25 +298,6 @@ function WorkItemEditPanel({
         </div>
 
         <div className="p-5 space-y-5">
-          {/* Entity pills */}
-          {bizEntities.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {bizEntities.map(be => {
-                const deadline = getDefaultDeadline(be.entity_type as EntityType, 2025);
-                return (
-                  <div key={be.name} className="flex items-center gap-1 px-2 py-1 rounded-lg border bg-indigo-50 border-indigo-200">
-                    <span className="text-[10px] font-bold text-indigo-700">{be.name}</span>
-                    <span className="text-[9px] text-indigo-500">·</span>
-                    <span className="text-[9px] text-indigo-600">{ENTITY_TYPE_SHORT[be.entity_type as EntityType]}</span>
-                    <span className="text-[9px] text-indigo-500">·</span>
-                    <Calendar className="w-2.5 h-2.5 text-indigo-400" />
-                    <span className="text-[9px] text-indigo-600">{formatDate(deadline)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
           {/* Status + Priority */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -350,7 +381,10 @@ function WorkItemEditPanel({
                     : 'bg-amber-50 text-amber-700 border-amber-200'
                 )}
               >
-                {item.payment_status === 'received' ? <><CheckCircle2 className="w-3 h-3" />Received</> : <><Clock className="w-3 h-3" />Pending</>}
+                {item.payment_status === 'received'
+                  ? <><CheckCircle2 className="w-3 h-3" />Received</>
+                  : <><Clock className="w-3 h-3" />Pending</>
+                }
               </button>
             </div>
           </div>
@@ -365,16 +399,12 @@ function WorkItemEditPanel({
             )}>
               <Clock className="w-3.5 h-3.5 flex-shrink-0" />
               {completedTasks > 0 && completedTasks === totalTasks ? (
-                <span className="font-semibold">
-                  ✓ Completed in {timeSpentH}h
-                </span>
+                <span className="font-semibold">✓ Completed in {timeSpentH}h</span>
               ) : (
                 <span><span className="font-semibold text-text-primary">{timeSpentH}h</span> logged so far</span>
               )}
-              {item.budget > 0 && (
-                <span className="ml-auto font-semibold">
-                  ${Math.round(item.budget / timeSpentH)}/hr
-                </span>
+              {item.budget > 0 && timeSpentH > 0 && (
+                <span className="ml-auto font-semibold">${Math.round(item.budget / timeSpentH)}/hr</span>
               )}
             </div>
           )}
@@ -388,9 +418,18 @@ function WorkItemEditPanel({
               </div>
               <div className="space-y-2">
                 {taskGroups.map(group => (
-                  <div key={group.name ?? '__none__'} className="rounded-xl border border-border overflow-hidden">
+                  <div
+                    key={group.name ?? '__none__'}
+                    className={clsx(
+                      'rounded-xl border overflow-hidden',
+                      group.name === focusEntityName
+                        ? 'border-indigo-300 ring-1 ring-indigo-200'
+                        : 'border-border'
+                    )}
+                  >
                     {group.name && (
                       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-hover/50 border-b border-border">
+                        <Building2 className="w-3 h-3 text-indigo-400" />
                         <span className="text-[10px] font-semibold text-text-primary">{group.name}</span>
                         {group.entityType && (
                           <span className="text-[8px] font-bold px-1 py-0.5 rounded border bg-white text-indigo-700 border-indigo-200">
@@ -406,24 +445,28 @@ function WorkItemEditPanel({
                       </div>
                     )}
                     <div className="divide-y divide-border">
-                      {group.tasks.map(task => (
-                        <button
-                          key={task.id}
-                          onClick={() => onCompleteTask(task.id, item.id, !task.completed)}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-surface-hover/50 transition-colors text-left group/task"
-                        >
-                          {task.completed
-                            ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                            : <Circle className="w-3.5 h-3.5 text-text-muted flex-shrink-0 group-hover/task:text-primary-400" />
-                          }
-                          <span className={clsx('text-xs flex-1 truncate', task.completed ? 'line-through text-text-muted' : 'text-text-primary')}>
-                            {task.title}
-                          </span>
-                          {task.assignee && (
-                            <span className="text-[9px] text-text-muted flex-shrink-0">{task.assignee.split(' ')[0]}</span>
-                          )}
-                        </button>
-                      ))}
+                      {group.tasks.length === 0 ? (
+                        <p className="px-3 py-2 text-[10px] text-text-muted/60 italic">No tasks for this entity</p>
+                      ) : (
+                        group.tasks.map(task => (
+                          <button
+                            key={task.id}
+                            onClick={() => onCompleteTask(task.id, item.id, !task.completed)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-surface-hover/50 transition-colors text-left group/task"
+                          >
+                            {task.completed
+                              ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                              : <Circle className="w-3.5 h-3.5 text-text-muted flex-shrink-0 group-hover/task:text-primary-400" />
+                            }
+                            <span className={clsx('text-xs flex-1 truncate', task.completed ? 'line-through text-text-muted' : 'text-text-primary')}>
+                              {task.title}
+                            </span>
+                            {task.assignee && (
+                              <span className="text-[9px] text-text-muted flex-shrink-0">{task.assignee.split(' ')[0]}</span>
+                            )}
+                          </button>
+                        ))
+                      )}
                     </div>
                   </div>
                 ))}
@@ -446,56 +489,101 @@ export default function WorkItemsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPayment, setFilterPayment] = useState<'' | 'pending' | 'received'>('');
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<WorkItemWithTasks | null>(null);
 
-  // Keep selectedItem in sync with live updates
-  useMemo(() => {
-    if (!selectedItem) return;
-    const updated = workItems.find(w => w.id === selectedItem.id);
-    if (updated) setSelectedItem(updated);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workItems]);
+  // Selected: { workItem, focusEntityName }
+  const [selected, setSelected] = useState<{ workItem: WorkItemWithTasks; focusEntityName: string | null } | null>(null);
 
+  // Tag colour map
   const tagColorMap = useMemo(() =>
     Object.fromEntries(globalTags.map(t => [t.name, t.color])),
     [globalTags]
   );
 
+  // Client lookup
   const clientMap = useMemo(() =>
     new Map(clients.map(c => [c.id, c])),
     [clients]
   );
 
+  // Keep selectedItem in sync with live work-item updates
+  useMemo(() => {
+    if (!selected) return;
+    const updated = workItems.find(w => w.id === selected.workItem.id);
+    if (updated) setSelected(prev => prev ? { ...prev, workItem: updated } : null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workItems]);
+
+  // ── Build flat entity-card list ───────────────────────────────────────────
+  const entityCards = useMemo((): EntityCard[] => {
+    const cards: EntityCard[] = [];
+
+    for (const item of workItems) {
+      const client = clientMap.get(item.client_id ?? '');
+      const bizEntities: BusinessEntity[] = (client?.business_entities as BusinessEntity[] | null) ?? [];
+
+      if (bizEntities.length === 0) {
+        // Individual / no entities → one card for the whole work item
+        cards.push({
+          workItem: item,
+          entityName: null,
+          entityType: null,
+          deadline: item.due_date,
+          tasks: item.tasks,
+        });
+      } else {
+        // One card per business entity
+        for (const be of bizEntities) {
+          const entityTasks = item.tasks.filter(t => t.business_name === be.name);
+          cards.push({
+            workItem: item,
+            entityName: be.name,
+            entityType: be.entity_type as EntityType,
+            deadline: getDefaultDeadline(be.entity_type as EntityType, 2025) ?? item.due_date,
+            tasks: entityTasks,
+          });
+        }
+      }
+    }
+
+    return cards;
+  }, [workItems, clientMap]);
+
+  // ── Filter entity cards ───────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    return workItems.filter(item => {
+    return entityCards.filter(card => {
       if (search) {
         const q = search.toLowerCase();
-        const matches = [item.title, item.client_name, item.business_name, ...(item.tags ?? [])].some(s => s?.toLowerCase().includes(q));
+        const matches = [
+          card.entityName,
+          card.workItem.client_name,
+          card.workItem.business_name,
+          ...(card.workItem.tags ?? []),
+        ].some(s => s?.toLowerCase().includes(q));
         if (!matches) return false;
       }
-      if (filterStatus && item.status !== filterStatus) return false;
-      if (filterPayment && (item.payment_status ?? 'pending') !== filterPayment) return false;
+      if (filterStatus && card.workItem.status !== filterStatus) return false;
+      if (filterPayment && (card.workItem.payment_status ?? 'pending') !== filterPayment) return false;
       return true;
     });
-  }, [workItems, search, filterStatus, filterPayment]);
+  }, [entityCards, search, filterStatus, filterPayment]);
 
   const activeFilterCount = (filterStatus ? 1 : 0) + (filterPayment ? 1 : 0);
 
-  // Stats
-  const total = workItems.length;
-  const inProgress = workItems.filter(w => w.status === 'in-progress').length;
-  const waiting = workItems.filter(w => w.status === 'waiting-on-client').length;
-  const completed = workItems.filter(w => w.status === 'completed').length;
+  // Stats (based on entity cards)
+  const total = entityCards.length;
+  const inProgress = entityCards.filter(c => c.workItem.status === 'in-progress').length;
+  const waiting = entityCards.filter(c => c.workItem.status === 'waiting-on-client').length;
+  const completedCount = entityCards.filter(c => c.workItem.status === 'completed').length;
 
   return (
-    <AppShell title="Work Items" subtitle="Browse and edit all client work items">
+    <AppShell title="Work Items" subtitle="One card per company — synced with the board">
       {/* Stats strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         {[
-          { label: 'Total',       value: total,       color: 'text-text-primary' },
-          { label: 'In Progress', value: inProgress,  color: 'text-primary-600' },
-          { label: 'Waiting',     value: waiting,     color: 'text-amber-600' },
-          { label: 'Completed',   value: completed,   color: 'text-green-600' },
+          { label: 'Total',       value: total,          color: 'text-text-primary' },
+          { label: 'In Progress', value: inProgress,     color: 'text-primary-600' },
+          { label: 'Waiting',     value: waiting,        color: 'text-amber-600' },
+          { label: 'Completed',   value: completedCount, color: 'text-green-600' },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-xl border border-border px-4 py-3">
             <p className={clsx('text-xl font-bold', s.color)}>{s.value}</p>
@@ -511,7 +599,7 @@ export default function WorkItemsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
           <input
             type="text"
-            placeholder="Search clients, work items..."
+            placeholder="Search companies, clients..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full h-9 pl-8 pr-8 text-xs bg-white rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 placeholder:text-text-muted"
@@ -580,7 +668,7 @@ export default function WorkItemsPage() {
           )}
         </div>
 
-        <span className="text-xs text-text-muted ml-auto">{filtered.length} items</span>
+        <span className="text-xs text-text-muted ml-auto">{filtered.length} companies</span>
       </div>
 
       {/* Grid */}
@@ -591,40 +679,39 @@ export default function WorkItemsPage() {
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Briefcase className="w-10 h-10 text-text-muted/30 mb-3" />
-          <p className="text-sm font-semibold text-text-primary">No work items found</p>
+          <p className="text-sm font-semibold text-text-primary">No companies found</p>
           <p className="text-xs text-text-muted mt-1">Try adjusting your search or filters</p>
         </div>
       ) : (
         <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           <AnimatePresence mode="popLayout">
-            {filtered.map(item => {
-              const client = clientMap.get(item.client_id ?? '');
-              const bizEntities: BusinessEntity[] = (client?.business_entities as BusinessEntity[] | null) ?? [];
-              return (
-                <WorkItemCard
-                  key={item.id}
-                  item={item}
-                  bizEntities={bizEntities}
-                  tagColorMap={tagColorMap}
-                  onClick={() => setSelectedItem(item)}
-                />
-              );
-            })}
+            {filtered.map((card, i) => (
+              <EntityCardView
+                key={`${card.workItem.id}__${card.entityName ?? 'individual'}`}
+                card={card}
+                tagColorMap={tagColorMap}
+                index={i}
+                onClick={() => setSelected({ workItem: card.workItem, focusEntityName: card.entityName })}
+              />
+            ))}
           </AnimatePresence>
         </motion.div>
       )}
 
       {/* Edit panel */}
       <AnimatePresence>
-        {selectedItem && (() => {
-          const client = clientMap.get(selectedItem.client_id ?? '');
+        {selected && (() => {
+          const client = clientMap.get(selected.workItem.client_id ?? '');
           const bizEntities: BusinessEntity[] = (client?.business_entities as BusinessEntity[] | null) ?? [];
           return (
             <WorkItemEditPanel
-              item={selectedItem}
+              item={selected.workItem}
               bizEntities={bizEntities}
-              onClose={() => setSelectedItem(null)}
-              onUpdate={async updates => { await updateWorkItem(selectedItem.id, updates as Partial<WorkItemWithTasks & Record<string, unknown>>); }}
+              focusEntityName={selected.focusEntityName}
+              onClose={() => setSelected(null)}
+              onUpdate={async updates => {
+                await updateWorkItem(selected.workItem.id, updates as Partial<WorkItemWithTasks & Record<string, unknown>>);
+              }}
               onCompleteTask={updateTaskCompletion}
             />
           );
