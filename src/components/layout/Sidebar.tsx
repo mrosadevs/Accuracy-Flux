@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, KanbanSquare, Mail,
   Clock, Settings, ChevronLeft, ChevronRight, Search,
-  Zap, Upload, X, UserCog
+  Zap, Upload, X, UserCog, Briefcase
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useProfile } from '@/lib/hooks/use-profile';
@@ -15,6 +15,7 @@ import { useNotifications } from '@/lib/hooks/use-notifications';
 const navItems = [
   { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard',     badge: null },
   { href: '/kanban',       icon: KanbanSquare,    label: 'Board',         badge: null },
+  { href: '/work',         icon: Briefcase,       label: 'Work Items',    badge: null },
   { href: '/clients',      icon: Users,           label: 'Clients',       badge: null },
   { href: '/email',        icon: Mail,            label: 'Triage',        badge: null },
   { href: '/time-billing', icon: Clock,           label: 'Time & Billing', badge: null },
