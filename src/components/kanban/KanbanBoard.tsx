@@ -1432,9 +1432,14 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
     addColumn, editColumn, deleteColumn,
   } = useBoard(boardId);
 
+  const { clients } = useClients();
+
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<string>('');
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [filterLabels, setFilterLabels] = useState<string[]>([]);
+  const [filterEntityTypes, setFilterEntityTypes] = useState<string[]>([]);
+  const [filterPayment, setFilterPayment] = useState<'' | 'pending' | 'received'>('');
   const [selectedCard, setSelectedCard] = useState<WorkItemCard | null>(null);
   const [addCardColumn, setAddCardColumn] = useState<string | undefined>(undefined);
   const [showNewCard, setShowNewCard] = useState(false);
@@ -1466,12 +1471,33 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
     await moveCard(result.draggableId, destination.droppableId, destination.index);
   }, [moveCard]);
 
+  const activeFilterCount = filterLabels.length + filterEntityTypes.length + (filterPayment ? 1 : 0);
+
+  function cardMatchesFilters(card: WorkItemCard): boolean {
+    // Label filter — card must have at least one of the selected labels
+    if (filterLabels.length > 0 && !filterLabels.some(l => (card.tags ?? []).includes(l))) return false;
+
+    // Entity type filter — look up client's business_entities to find their entity types
+    if (filterEntityTypes.length > 0) {
+      const client = clients.find(c => c.id === card.client_id);
+      const bizEntities: BusinessEntity[] = (client?.business_entities as BusinessEntity[] | null) ?? [];
+      const cardEntityTypes = bizEntities.length > 0
+        ? bizEntities.map(be => be.entity_type as string)
+        : ['individual'];
+      if (!filterEntityTypes.some(et => cardEntityTypes.includes(et))) return false;
+    }
+
+    // Payment filter
+    if (filterPayment && (card.payment_status ?? 'pending') !== filterPayment) return false;
+
+    return true;
+  }
+
   // Filtered cards
   const allCards = columns.flatMap(c => c.cards);
   const filteredCards = allCards.filter(card => {
     const matchesSearch = !searchQuery || [card.title, card.client_name, card.business_name, ...(card.tags ?? [])].some(s => s?.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesType = !filterType || card.type === filterType;
-    return matchesSearch && matchesType;
+    return matchesSearch && cardMatchesFilters(card);
   });
 
   if (loading) {
@@ -1576,15 +1602,103 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
             </button>
           </div>
 
-          {/* Type filter */}
-          <select
-            value={filterType}
-            onChange={e => setFilterType(e.target.value)}
-            className="h-8 px-3 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 text-text-secondary"
-          >
-            <option value="">All Types</option>
-            {Object.entries(typeConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
+          {/* Filter button + panel */}
+          <div className="relative">
+            <button
+              onClick={() => setShowFilterPanel(p => !p)}
+              className={clsx(
+                'flex items-center gap-1.5 h-8 px-3 rounded-lg border text-xs font-medium transition-all',
+                activeFilterCount > 0
+                  ? 'bg-primary-50 border-primary-300 text-primary-700'
+                  : 'bg-white border-border text-text-secondary hover:border-primary-300'
+              )}
+            >
+              <Filter className="w-3 h-3" />
+              Filter
+              {activeFilterCount > 0 && (
+                <span className="bg-primary-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{activeFilterCount}</span>
+              )}
+            </button>
+
+            {showFilterPanel && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowFilterPanel(false)} />
+                <div className="absolute left-0 top-full mt-2 w-72 bg-white rounded-xl border border-border shadow-xl z-30 p-3 space-y-4 max-h-[80vh] overflow-y-auto">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-text-primary">Filters</span>
+                    {activeFilterCount > 0 && (
+                      <button
+                        onClick={() => { setFilterLabels([]); setFilterEntityTypes([]); setFilterPayment(''); }}
+                        className="text-[10px] text-primary-600 hover:underline"
+                      >Clear all</button>
+                    )}
+                  </div>
+
+                  {/* Labels */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Labels</p>
+                    {globalTags.length === 0 ? (
+                      <p className="text-[11px] text-text-muted italic px-2">No labels yet</p>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {globalTags.map(tag => (
+                          <label key={tag.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-hover cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={filterLabels.includes(tag.name)}
+                              onChange={e => setFilterLabels(prev => e.target.checked ? [...prev, tag.name] : prev.filter(l => l !== tag.name))}
+                              className="rounded border-border text-primary-600 focus:ring-primary-500/20"
+                            />
+                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                            <span className="text-xs text-text-primary">{tag.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Entity Type */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Entity Type</p>
+                    <div className="space-y-0.5">
+                      {Object.entries(ENTITY_TYPE_SHORT).map(([key, label]) => (
+                        <label key={key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-hover cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={filterEntityTypes.includes(key)}
+                            onChange={e => setFilterEntityTypes(prev => e.target.checked ? [...prev, key] : prev.filter(et => et !== key))}
+                            className="rounded border-border text-primary-600 focus:ring-primary-500/20"
+                          />
+                          <span className="text-xs text-text-primary">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Payment Status */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Payment</p>
+                    <div className="flex gap-1.5">
+                      {(['', 'pending', 'received'] as const).map(p => (
+                        <button
+                          key={p}
+                          onClick={() => setFilterPayment(p)}
+                          className={clsx(
+                            'flex-1 py-1.5 text-[10px] font-semibold rounded-lg border transition-all',
+                            filterPayment === p
+                              ? 'bg-primary-50 border-primary-300 text-primary-700'
+                              : 'border-border text-text-secondary hover:border-primary-200'
+                          )}
+                        >
+                          {p === '' ? 'All' : p === 'pending' ? 'Pending' : 'Received'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -1610,8 +1724,7 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
             {columns.map((column, colIndex) => {
               const visibleCards = column.cards.filter(card => {
                 const matchesSearch = !searchQuery || [card.title, card.client_name, card.business_name, ...(card.tags ?? [])].some(s => s?.toLowerCase().includes(searchQuery.toLowerCase()));
-                const matchesType = !filterType || card.type === filterType;
-                return matchesSearch && matchesType;
+                return matchesSearch && cardMatchesFilters(card);
               });
 
               return (
