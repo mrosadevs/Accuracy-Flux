@@ -321,52 +321,18 @@ function CardDetailPanel({
       ? (bizEntities.find(b => b.name === card.business_name)?.entity_type ?? null)
       : null);
 
-  // Group tasks by entity. Always shows a section per entity so companies
-  // are visible even before add_tasks_v2.sql has been run.
+  // Each card now represents exactly ONE entity (or an individual with no entity).
+  // Show all tasks under that one entity header, regardless of task.business_name.
   const taskGroups = (() => {
     type Group = { name: string | null; entityType: EntityType | null; tasks: Task[] };
-    const result: Group[] = [];
 
-    if (bizEntities.length === 0) {
-      // Individual client — flat list, no section header
+    if (!card.business_name) {
+      // Individual — flat list, no section header
       return [{ name: null, entityType: null, tasks: card.tasks }];
     }
 
-    // Map tasks that already have business_name assigned
-    const byBiz = new Map<string, Task[]>();
-    const unassigned: Task[] = [];
-    for (const task of card.tasks) {
-      if (task.business_name) {
-        if (!byBiz.has(task.business_name)) byBiz.set(task.business_name, []);
-        byBiz.get(task.business_name)!.push(task);
-      } else {
-        unassigned.push(task);
-      }
-    }
-
-    // One section per entity. If all tasks are unassigned AND there's only one
-    // entity, assign them all to it (tasks pre-date the business_name migration).
-    const singleEntityFallback = bizEntities.length === 1 && unassigned.length > 0 && byBiz.size === 0;
-
-    for (const be of bizEntities) {
-      const assigned = byBiz.get(be.name) ?? [];
-      const tasks = singleEntityFallback ? [...assigned, ...unassigned] : assigned;
-      result.push({ name: be.name, entityType: be.entity_type, tasks });
-    }
-
-    // Any remaining unassigned tasks (multiple entities, pre-migration) go in a General section
-    if (!singleEntityFallback && unassigned.length > 0) {
-      result.push({ name: null, entityType: null, tasks: unassigned });
-    }
-
-    // Tasks with an unknown business_name (shouldn't normally happen)
-    byBiz.forEach((tasks, name) => {
-      if (!bizEntities.some(be => be.name === name)) {
-        result.push({ name, entityType: null, tasks });
-      }
-    });
-
-    return result;
+    // Single entity card — all tasks belong to this entity
+    return [{ name: card.business_name, entityType: entityType, tasks: card.tasks }];
   })();
 
   const completedTasks = card.tasks.filter(t => t.completed).length;
@@ -525,9 +491,9 @@ function CardDetailPanel({
             />
           </div>
 
-          {/* Budget */}
+          {/* Engagement Fee */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-text-muted font-medium w-20 flex-shrink-0">Budget</span>
+            <span className="text-xs text-text-muted font-medium w-20 flex-shrink-0">Fee</span>
             {editing === 'budget' ? (
               <div className="flex-1 flex items-center gap-2">
                 <input
@@ -1285,10 +1251,12 @@ function BoardCard({ card, index, onOpen, onDelete, globalTags }: {
               )}
             </div>
 
-            {/* Client name */}
-            <p className="text-sm font-semibold text-text-primary leading-snug mb-0.5">{card.client_name || 'No client'}</p>
+            {/* Primary name: company if it exists, otherwise client name */}
+            <p className="text-sm font-semibold text-text-primary leading-snug mb-0.5">
+              {card.business_name || card.client_name || 'No client'}
+            </p>
             {card.business_name && (
-              <p className="text-[10px] text-text-muted mb-1.5">{card.business_name}</p>
+              <p className="text-[10px] text-text-muted mb-1.5">{card.client_name}</p>
             )}
 
             {/* Title (work description) */}
@@ -1512,7 +1480,7 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
             onClose={() => setSelectedCard(null)}
             onUpdate={updates => updateCard(selectedCard.id, updates)}
             onCompleteTask={(taskId, completed, status) => completeTask(taskId, selectedCard.id, completed, status)}
-            onAddTask={title => addTask(selectedCard.id, title)}
+            onAddTask={title => addTask(selectedCard.id, title, undefined, undefined, undefined, selectedCard.business_name)}
             onDeleteTask={taskId => deleteTask(taskId)}
             onMoveColumn={colId => moveCard(selectedCard.id, colId)}
             onAddTag={async tag => { await addTag(selectedCard.id, tag); await ensureTag(tag); }}

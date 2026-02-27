@@ -153,7 +153,7 @@ export function useBoard(boardId?: string) {
   }
 
   // ─── Add task ───────────────────────────────────────────────────────────────
-  async function addTask(workItemId: string, title: string, assignee?: string, assigneeId?: string, dueDate?: string) {
+  async function addTask(workItemId: string, title: string, assignee?: string, assigneeId?: string, dueDate?: string, businessName?: string | null) {
     if (!configured) return null;
     const card = columns.flatMap(c => c.cards).find(c => c.id === workItemId);
     const sortOrder = card ? card.tasks.length : 0;
@@ -168,6 +168,7 @@ export function useBoard(boardId?: string) {
         assignee_id: assigneeId ?? null,
         due_date: dueDate ?? null,
         sort_order: sortOrder,
+        business_name: businessName ?? null,
       })
       .select()
       .single();
