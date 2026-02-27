@@ -35,7 +35,10 @@ export async function proxy(request: NextRequest) {
 
   const isPublicPath =
     pathname.startsWith('/login') ||
-    pathname.startsWith('/auth/callback');
+    pathname.startsWith('/auth/') ||
+    pathname.startsWith('/portal') ||
+    pathname.startsWith('/invite-expired') ||
+    pathname.startsWith('/set-password');
 
   // Not logged in → redirect to login (except public paths)
   if (!user && !isPublicPath) {
