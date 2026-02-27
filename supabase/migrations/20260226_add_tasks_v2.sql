@@ -1,0 +1,363 @@
+-- ============================================================
+-- add_tasks_v2.sql
+-- Deletes all existing tasks and recreates them per entity.
+-- Each client entity gets its own task set with business_name set.
+-- Clients with no entities get individual tasks with NULL business_name.
+-- Tasks are auto-checked based on column position.
+-- ============================================================
+
+-- PREREQUISITE: run this first in Supabase SQL editor:
+-- ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS business_name text;
+
+-- Step 1: Wipe all existing tasks
+DELETE FROM public.tasks;
+
+-- Step 2: Rebuild tasks per (work_item x entity)
+WITH
+
+-- Map kanban column sort_order to max completed phase priority
+col_prios AS (
+  SELECT
+    id,
+    CASE sort_order
+      WHEN 0 THEN 0   -- New Client: nothing pre-checked
+      WHEN 1 THEN 1   -- Estimate Approved: Engagement done
+      WHEN 2 THEN 3   -- In Progress: through Document Collection
+      WHEN 3 THEN 5   -- In Review: through Tax Preparation
+      WHEN 4 THEN 4   -- Pending Financial Approval: through Bookkeeping
+      WHEN 5 THEN 6   -- Complete Tax Filing: through Quality Review
+      WHEN 6 THEN 7   -- Sent to Client: through Client Approval
+      WHEN 7 THEN 99  -- Filed/Sent to IRS: everything done
+      ELSE 0
+    END AS max_prio
+  FROM public.kanban_columns
+),
+
+-- Template task rows: (entity_type_key, phase_prio, title, task_sort)
+tmpl(entity_type_key, phase_prio, title, task_sort) AS (
+  VALUES
+  ('individual', 1, 'Send engagement letter to client', 1),
+  ('individual', 1, 'Obtain signed engagement letter', 2),
+  ('individual', 1, 'Request prior year return for comparison', 3),
+  ('individual', 1, 'Set up client in tax software', 4),
+  ('individual', 2, 'File extension (Form 4868) with IRS', 5),
+  ('individual', 2, 'Confirm extension accepted by IRS', 6),
+  ('individual', 3, 'Send document request list to client', 7),
+  ('individual', 3, 'Receive all tax documents from client', 8),
+  ('individual', 3, 'Verify all W-2s received', 9),
+  ('individual', 3, 'Check all 1099s (interest, dividends, misc)', 10),
+  ('individual', 3, 'Collect retirement distribution statements (1099-R)', 11),
+  ('individual', 3, 'Review Social Security benefit statement (SSA-1099)', 12),
+  ('individual', 3, 'Collect mortgage interest statement (1098)', 13),
+  ('individual', 3, 'Verify health insurance / ACA documents (1095-A if applicable)', 14),
+  ('individual', 3, 'Follow up on any missing documents', 15),
+  ('individual', 5, 'Enter all income data into tax software', 16),
+  ('individual', 5, 'Enter itemized deductions (if applicable)', 17),
+  ('individual', 5, 'Review and enter investment gains/losses (Schedule D)', 18),
+  ('individual', 5, 'Enter Schedule C business income/expenses (if applicable)', 19),
+  ('individual', 5, 'Calculate home office deduction (if applicable)', 20),
+  ('individual', 5, 'Review carryovers from prior year', 21),
+  ('individual', 5, 'Prepare state return (Form F-1040 or applicable)', 22),
+  ('individual', 6, 'Internal review by preparer', 23),
+  ('individual', 6, 'Manager / CPA review and sign-off', 24),
+  ('individual', 6, 'Reconcile return to prior year', 25),
+  ('individual', 6, 'Resolve any open questions / review notes', 26),
+  ('individual', 7, 'Send return to client for review', 27),
+  ('individual', 7, 'Discuss any questions or concerns with client', 28),
+  ('individual', 7, 'Obtain signed Form 8879 (e-file authorization)', 29),
+  ('individual', 8, 'E-file federal return (Form 1040)', 30),
+  ('individual', 8, 'Confirm IRS acceptance', 31),
+  ('individual', 8, 'E-file state return', 32),
+  ('individual', 8, 'Confirm state acceptance', 33),
+  ('individual', 9, 'Send client copy of completed return', 34),
+  ('individual', 9, 'Update billing and invoice client', 35),
+  ('individual', 9, 'Archive documents securely', 36),
+  ('individual', 9, 'Note tax planning items for next year', 37),
+  ('sole-prop', 1, 'Send engagement letter to client', 1),
+  ('sole-prop', 1, 'Obtain signed engagement letter', 2),
+  ('sole-prop', 1, 'Request prior year return for comparison', 3),
+  ('sole-prop', 1, 'Set up client in tax software', 4),
+  ('sole-prop', 2, 'File extension (Form 4868) with IRS', 5),
+  ('sole-prop', 2, 'Confirm extension accepted by IRS', 6),
+  ('sole-prop', 3, 'Send document request list to client', 7),
+  ('sole-prop', 3, 'Receive all tax documents from client', 8),
+  ('sole-prop', 3, 'Verify all W-2s received', 9),
+  ('sole-prop', 3, 'Check all 1099s (interest, dividends, misc)', 10),
+  ('sole-prop', 3, 'Collect retirement distribution statements (1099-R)', 11),
+  ('sole-prop', 3, 'Review Social Security benefit statement (SSA-1099)', 12),
+  ('sole-prop', 3, 'Collect mortgage interest statement (1098)', 13),
+  ('sole-prop', 3, 'Verify health insurance / ACA documents (1095-A if applicable)', 14),
+  ('sole-prop', 3, 'Follow up on any missing documents', 15),
+  ('sole-prop', 5, 'Enter all income data into tax software', 16),
+  ('sole-prop', 5, 'Enter itemized deductions (if applicable)', 17),
+  ('sole-prop', 5, 'Review and enter investment gains/losses (Schedule D)', 18),
+  ('sole-prop', 5, 'Enter Schedule C business income/expenses (if applicable)', 19),
+  ('sole-prop', 5, 'Calculate home office deduction (if applicable)', 20),
+  ('sole-prop', 5, 'Review carryovers from prior year', 21),
+  ('sole-prop', 5, 'Prepare state return (Form F-1040 or applicable)', 22),
+  ('sole-prop', 6, 'Internal review by preparer', 23),
+  ('sole-prop', 6, 'Manager / CPA review and sign-off', 24),
+  ('sole-prop', 6, 'Reconcile return to prior year', 25),
+  ('sole-prop', 6, 'Resolve any open questions / review notes', 26),
+  ('sole-prop', 7, 'Send return to client for review', 27),
+  ('sole-prop', 7, 'Discuss any questions or concerns with client', 28),
+  ('sole-prop', 7, 'Obtain signed Form 8879 (e-file authorization)', 29),
+  ('sole-prop', 8, 'E-file federal return (Form 1040)', 30),
+  ('sole-prop', 8, 'Confirm IRS acceptance', 31),
+  ('sole-prop', 8, 'E-file state return', 32),
+  ('sole-prop', 8, 'Confirm state acceptance', 33),
+  ('sole-prop', 9, 'Send client copy of completed return', 34),
+  ('sole-prop', 9, 'Update billing and invoice client', 35),
+  ('sole-prop', 9, 'Archive documents securely', 36),
+  ('sole-prop', 9, 'Note tax planning items for next year', 37),
+  ('llc-single', 1, 'Send engagement letter to client', 1),
+  ('llc-single', 1, 'Obtain signed engagement letter', 2),
+  ('llc-single', 1, 'Set up client in tax software', 3),
+  ('llc-single', 2, 'File personal extension (Form 4868) with IRS', 4),
+  ('llc-single', 2, 'Confirm extension accepted by IRS', 5),
+  ('llc-single', 3, 'Request business financial information from client', 6),
+  ('llc-single', 3, 'Receive business records / bank statements', 7),
+  ('llc-single', 4, 'Process bookkeeping for the LLC', 8),
+  ('llc-single', 4, 'Prepare financial statements (P&L and Balance Sheet)', 9),
+  ('llc-single', 4, 'Client approves financial statements', 10),
+  ('llc-single', 3, 'Collect personal income documents (W-2, 1099, etc.)', 11),
+  ('llc-single', 3, 'Follow up on any missing documents', 12),
+  ('llc-single', 5, 'Enter business income/expenses on Schedule C', 13),
+  ('llc-single', 5, 'Calculate self-employment tax (Schedule SE)', 14),
+  ('llc-single', 5, 'Enter all personal income data into tax software', 15),
+  ('llc-single', 5, 'Review carryovers from prior year', 16),
+  ('llc-single', 5, 'Prepare state return (Form F-1040 or applicable)', 17),
+  ('llc-single', 6, 'Internal review by preparer', 18),
+  ('llc-single', 6, 'Manager / CPA review and sign-off', 19),
+  ('llc-single', 6, 'Resolve any open questions', 20),
+  ('llc-single', 7, 'Send return to client for review', 21),
+  ('llc-single', 7, 'Obtain signed Form 8879 (e-file authorization)', 22),
+  ('llc-single', 8, 'E-file federal return (Form 1040 + Schedule C)', 23),
+  ('llc-single', 8, 'Confirm IRS acceptance', 24),
+  ('llc-single', 8, 'E-file state return', 25),
+  ('llc-single', 8, 'Confirm state acceptance', 26),
+  ('llc-single', 9, 'Send client copy of completed return', 27),
+  ('llc-single', 9, 'Update billing and invoice client', 28),
+  ('llc-single', 9, 'Archive documents securely', 29),
+  ('s-corp', 1, 'Send engagement letter to client', 1),
+  ('s-corp', 1, 'Obtain signed engagement letter', 2),
+  ('s-corp', 1, 'Request prior year 1120-S return', 3),
+  ('s-corp', 1, 'Confirm shareholder information and ownership %', 4),
+  ('s-corp', 2, 'File extension (Form 7004) with IRS', 5),
+  ('s-corp', 2, 'Confirm extension accepted by IRS', 6),
+  ('s-corp', 3, 'Request financial information from client', 7),
+  ('s-corp', 3, 'Receive financial information from client', 8),
+  ('s-corp', 3, 'Collect business bank statements', 9),
+  ('s-corp', 3, 'Obtain payroll records and officer W-2s', 10),
+  ('s-corp', 3, 'Collect 1099s issued to contractors', 11),
+  ('s-corp', 3, 'Gather fixed asset additions and disposals', 12),
+  ('s-corp', 3, 'Review health insurance premiums paid for shareholders', 13),
+  ('s-corp', 4, 'Process bookkeeping', 14),
+  ('s-corp', 4, 'Prepare financial statements (P&L and Balance Sheet)', 15),
+  ('s-corp', 4, 'Client approves financial statements', 16),
+  ('s-corp', 5, 'Reconcile book income to taxable income', 17),
+  ('s-corp', 5, 'Prepare depreciation schedule (Form 4562)', 18),
+  ('s-corp', 5, 'Calculate shareholder basis', 19),
+  ('s-corp', 5, 'Verify reasonable compensation for officer(s)', 20),
+  ('s-corp', 5, 'Prepare Schedule K and K-1 for each shareholder', 21),
+  ('s-corp', 5, 'Prepare state business return (Form F-1120 for FL)', 22),
+  ('s-corp', 5, 'Review prior year carryovers', 23),
+  ('s-corp', 6, 'Internal review by preparer', 24),
+  ('s-corp', 6, 'Manager / CPA review and sign-off', 25),
+  ('s-corp', 6, 'Verify K-1 amounts tie to return', 26),
+  ('s-corp', 6, 'Resolve any open questions', 27),
+  ('s-corp', 7, 'Send Form 1120-S to client for review', 28),
+  ('s-corp', 7, 'Obtain signed Form 8879-S (e-file authorization)', 29),
+  ('s-corp', 8, 'E-file federal Form 1120-S', 30),
+  ('s-corp', 8, 'Confirm IRS acceptance', 31),
+  ('s-corp', 8, 'Distribute signed K-1s to all shareholders', 32),
+  ('s-corp', 8, 'E-file Florida Form F-1120', 33),
+  ('s-corp', 8, 'Confirm Florida acceptance', 34),
+  ('s-corp', 9, 'Send client copy of completed return', 35),
+  ('s-corp', 9, 'Update billing and invoice client', 36),
+  ('s-corp', 9, 'Archive documents securely', 37),
+  ('s-corp', 9, 'Note year-end planning items', 38),
+  ('partnership', 1, 'Send engagement letter to client', 1),
+  ('partnership', 1, 'Obtain signed engagement letter', 2),
+  ('partnership', 1, 'Request prior year 1065 return', 3),
+  ('partnership', 1, 'Confirm partner information and ownership %', 4),
+  ('partnership', 2, 'Request / file extension (Form 7004) with IRS', 5),
+  ('partnership', 2, 'Confirm extension accepted by IRS', 6),
+  ('partnership', 3, 'Request financial information from client', 7),
+  ('partnership', 3, 'Receive financial information from client', 8),
+  ('partnership', 3, 'Collect business bank statements', 9),
+  ('partnership', 3, 'Obtain guaranteed payment records', 10),
+  ('partnership', 3, 'Collect 1099s issued to contractors', 11),
+  ('partnership', 3, 'Gather fixed asset additions and disposals', 12),
+  ('partnership', 4, 'Process bookkeeping', 13),
+  ('partnership', 4, 'Prepare financial statements (P&L and Balance Sheet)', 14),
+  ('partnership', 4, 'Client approves financial statements', 15),
+  ('partnership', 5, 'Reconcile book income to taxable income', 16),
+  ('partnership', 5, 'Prepare depreciation schedule (Form 4562)', 17),
+  ('partnership', 5, 'Calculate partner capital accounts', 18),
+  ('partnership', 5, 'Prepare Schedule K and K-1 for each partner', 19),
+  ('partnership', 5, 'Determine if Form 8804 is required (foreign partners)', 20),
+  ('partnership', 5, 'Review prior year carryovers', 21),
+  ('partnership', 6, 'Internal review by preparer', 22),
+  ('partnership', 6, 'Manager / CPA review and sign-off', 23),
+  ('partnership', 6, 'Verify K-1 amounts tie to return', 24),
+  ('partnership', 6, 'Resolve any open questions', 25),
+  ('partnership', 7, 'Send Form 1065 to client for review', 26),
+  ('partnership', 7, 'Obtain signed Form 8879 (e-file authorization)', 27),
+  ('partnership', 8, 'E-file federal Form 1065', 28),
+  ('partnership', 8, 'Confirm IRS acceptance', 29),
+  ('partnership', 8, 'Distribute signed K-1s to all partners', 30),
+  ('partnership', 8, 'File Form 8804 / 8805 (if foreign partners)', 31),
+  ('partnership', 8, 'Send signed Form 8804 to IRS', 32),
+  ('partnership', 9, 'Send client copy of completed return', 33),
+  ('partnership', 9, 'Update billing and invoice client', 34),
+  ('partnership', 9, 'Archive documents securely', 35),
+  ('llc-multi', 1, 'Send engagement letter to client', 1),
+  ('llc-multi', 1, 'Obtain signed engagement letter', 2),
+  ('llc-multi', 1, 'Request prior year 1065 return', 3),
+  ('llc-multi', 1, 'Confirm partner information and ownership %', 4),
+  ('llc-multi', 2, 'Request / file extension (Form 7004) with IRS', 5),
+  ('llc-multi', 2, 'Confirm extension accepted by IRS', 6),
+  ('llc-multi', 3, 'Request financial information from client', 7),
+  ('llc-multi', 3, 'Receive financial information from client', 8),
+  ('llc-multi', 3, 'Collect business bank statements', 9),
+  ('llc-multi', 3, 'Obtain guaranteed payment records', 10),
+  ('llc-multi', 3, 'Collect 1099s issued to contractors', 11),
+  ('llc-multi', 3, 'Gather fixed asset additions and disposals', 12),
+  ('llc-multi', 4, 'Process bookkeeping', 13),
+  ('llc-multi', 4, 'Prepare financial statements (P&L and Balance Sheet)', 14),
+  ('llc-multi', 4, 'Client approves financial statements', 15),
+  ('llc-multi', 5, 'Reconcile book income to taxable income', 16),
+  ('llc-multi', 5, 'Prepare depreciation schedule (Form 4562)', 17),
+  ('llc-multi', 5, 'Calculate partner capital accounts', 18),
+  ('llc-multi', 5, 'Prepare Schedule K and K-1 for each partner', 19),
+  ('llc-multi', 5, 'Determine if Form 8804 is required (foreign partners)', 20),
+  ('llc-multi', 5, 'Review prior year carryovers', 21),
+  ('llc-multi', 6, 'Internal review by preparer', 22),
+  ('llc-multi', 6, 'Manager / CPA review and sign-off', 23),
+  ('llc-multi', 6, 'Verify K-1 amounts tie to return', 24),
+  ('llc-multi', 6, 'Resolve any open questions', 25),
+  ('llc-multi', 7, 'Send Form 1065 to client for review', 26),
+  ('llc-multi', 7, 'Obtain signed Form 8879 (e-file authorization)', 27),
+  ('llc-multi', 8, 'E-file federal Form 1065', 28),
+  ('llc-multi', 8, 'Confirm IRS acceptance', 29),
+  ('llc-multi', 8, 'Distribute signed K-1s to all partners', 30),
+  ('llc-multi', 8, 'File Form 8804 / 8805 (if foreign partners)', 31),
+  ('llc-multi', 8, 'Send signed Form 8804 to IRS', 32),
+  ('llc-multi', 9, 'Send client copy of completed return', 33),
+  ('llc-multi', 9, 'Update billing and invoice client', 34),
+  ('llc-multi', 9, 'Archive documents securely', 35),
+  ('c-corp', 1, 'Send engagement letter to client', 1),
+  ('c-corp', 1, 'Obtain signed engagement letter', 2),
+  ('c-corp', 1, 'Request prior year 1120 return', 3),
+  ('c-corp', 1, 'Verify corporate officer information', 4),
+  ('c-corp', 2, 'File extension (Form 7004) with IRS', 5),
+  ('c-corp', 2, 'Confirm extension accepted by IRS', 6),
+  ('c-corp', 3, 'Request financial information from client', 7),
+  ('c-corp', 3, 'Receive financial information from client', 8),
+  ('c-corp', 3, 'Collect business bank statements', 9),
+  ('c-corp', 3, 'Obtain payroll records and W-2 summary', 10),
+  ('c-corp', 3, 'Collect 1099s issued to contractors', 11),
+  ('c-corp', 3, 'Gather fixed asset schedule (additions / disposals)', 12),
+  ('c-corp', 3, 'Review dividend distributions and corporate minutes', 13),
+  ('c-corp', 3, 'Verify estimated tax payments made', 14),
+  ('c-corp', 4, 'Process bookkeeping', 15),
+  ('c-corp', 4, 'Prepare financial statements (P&L and Balance Sheet)', 16),
+  ('c-corp', 4, 'Client approves financial statements', 17),
+  ('c-corp', 5, 'Reconcile book income to taxable income (Sch. M-1/M-3)', 18),
+  ('c-corp', 5, 'Prepare depreciation schedule (Form 4562)', 19),
+  ('c-corp', 5, 'Review and apply NOL carryforwards', 20),
+  ('c-corp', 5, 'Calculate estimated tax for next year', 21),
+  ('c-corp', 6, 'Internal review by preparer', 22),
+  ('c-corp', 6, 'Manager / CPA review and sign-off', 23),
+  ('c-corp', 6, 'Verify Sch. M-1 reconciliation', 24),
+  ('c-corp', 6, 'Resolve any open questions', 25),
+  ('c-corp', 7, 'Send Form 1120 to client for review', 26),
+  ('c-corp', 7, 'Obtain officer signature on Form 8879-C', 27),
+  ('c-corp', 8, 'E-file federal Form 1120', 28),
+  ('c-corp', 8, 'Confirm IRS acceptance', 29),
+  ('c-corp', 8, 'Prepare Florida Form F-1120', 30),
+  ('c-corp', 8, 'Obtain client signature on FL return', 31),
+  ('c-corp', 8, 'E-file Florida Form F-1120', 32),
+  ('c-corp', 8, 'Confirm Florida acceptance', 33),
+  ('c-corp', 9, 'Send client copy of completed return', 34),
+  ('c-corp', 9, 'Update billing and invoice client', 35),
+  ('c-corp', 9, 'Archive documents securely', 36),
+  ('c-corp', 9, 'Schedule year-end tax planning meeting', 37),
+  ('non-profit', 1, 'Send engagement letter', 1),
+  ('non-profit', 1, 'Obtain signed engagement letter', 2),
+  ('non-profit', 1, 'Request prior year Form 990', 3),
+  ('non-profit', 1, 'Confirm board member and officer information', 4),
+  ('non-profit', 2, 'File extension (Form 8868) if needed', 5),
+  ('non-profit', 2, 'Confirm extension accepted', 6),
+  ('non-profit', 3, 'Collect audited financial statements', 7),
+  ('non-profit', 3, 'Obtain revenue breakdowns (program, management, fundraising)', 8),
+  ('non-profit', 3, 'Collect grant revenue details', 9),
+  ('non-profit', 3, 'Gather executive compensation details', 10),
+  ('non-profit', 3, 'Review related party transactions', 11),
+  ('non-profit', 5, 'Complete Form 990 (Part I-XII)', 12),
+  ('non-profit', 5, 'Prepare Schedule A (public support test)', 13),
+  ('non-profit', 5, 'Prepare applicable schedules (B, G, L, O, etc.)', 14),
+  ('non-profit', 5, 'Prepare state charitable registration filings', 15),
+  ('non-profit', 6, 'Internal review by preparer', 16),
+  ('non-profit', 6, 'Manager / CPA review and sign-off', 17),
+  ('non-profit', 7, 'Send draft to executive director / board', 18),
+  ('non-profit', 7, 'Obtain board approval and officer signature', 19),
+  ('non-profit', 8, 'E-file Form 990', 20),
+  ('non-profit', 8, 'Confirm IRS acceptance', 21),
+  ('non-profit', 9, 'Post 990 publicly (3-year public disclosure requirement)', 22),
+  ('non-profit', 9, 'Update billing and invoice', 23),
+  ('non-profit', 9, 'Archive documents securely', 24)
+),
+
+-- Work items where the client HAS business entities
+work_with_entities AS (
+  SELECT
+    wi.id                         AS work_item_id,
+    COALESCE(cp.max_prio, 0)      AS max_prio,
+    (be->>'name')::text           AS business_name,
+    (be->>'entity_type')::text    AS entity_type_key
+  FROM public.work_items wi
+  LEFT JOIN col_prios cp ON cp.id = wi.column_id
+  JOIN public.clients c  ON c.id  = wi.client_id
+  CROSS JOIN LATERAL jsonb_array_elements(c.business_entities) AS be
+  WHERE c.business_entities IS NOT NULL
+    AND jsonb_array_length(c.business_entities) > 0
+),
+
+-- Work items where the client has NO entities (individual client)
+work_no_entities AS (
+  SELECT
+    wi.id                     AS work_item_id,
+    COALESCE(cp.max_prio, 0)  AS max_prio,
+    NULL::text                AS business_name,
+    'individual'::text        AS entity_type_key
+  FROM public.work_items wi
+  LEFT JOIN col_prios cp ON cp.id = wi.column_id
+  JOIN public.clients c  ON c.id  = wi.client_id
+  WHERE c.business_entities IS NULL
+     OR jsonb_array_length(c.business_entities) = 0
+),
+
+all_work AS (
+  SELECT * FROM work_with_entities
+  UNION ALL
+  SELECT * FROM work_no_entities
+)
+
+INSERT INTO public.tasks
+  (work_item_id, title, completed, status,
+   assignee_id, assignee, due_date, sort_order, business_name)
+SELECT
+  aw.work_item_id,
+  t.title,
+  (t.phase_prio <= aw.max_prio)                                        AS completed,
+  CASE WHEN t.phase_prio <= aw.max_prio THEN 'done' ELSE 'todo' END   AS status,
+  NULL::uuid  AS assignee_id,
+  NULL::text  AS assignee,
+  NULL::date  AS due_date,
+  t.task_sort AS sort_order,
+  aw.business_name
+FROM all_work aw
+JOIN tmpl t ON t.entity_type_key = aw.entity_type_key
+ORDER BY aw.work_item_id, aw.business_name NULLS LAST, t.task_sort;
