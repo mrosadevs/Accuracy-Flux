@@ -37,16 +37,21 @@ export default function DashboardPage() {
   const workPaymentThisMonth = workItems
     .filter(w => w.payment_status === 'received' && w.budget > 0 && w.payment_received_at && w.payment_received_at >= monthStart)
     .reduce((s, w) => s + w.budget, 0);
+  // Use < monthStart instead of <= lastMonthEnd: payment_received_at is a full
+  // ISO timestamp (e.g. "2026-01-31T23:30Z") which is lexicographically > the
+  // bare date string "2026-01-31", so <= would miss payments on the last day.
   const workPaymentLastMonth = workItems
-    .filter(w => w.payment_status === 'received' && w.budget > 0 && w.payment_received_at && w.payment_received_at >= lastMonthStart && w.payment_received_at <= lastMonthEnd)
+    .filter(w => w.payment_status === 'received' && w.budget > 0 && w.payment_received_at && w.payment_received_at >= lastMonthStart && w.payment_received_at < monthStart)
     .reduce((s, w) => s + w.budget, 0);
 
   const revenueThisMonth = invoiceThisMonth + workPaymentThisMonth;
   const revenueLastMonth = invoiceLastMonth + workPaymentLastMonth;
 
+  // Only show a % change badge when we actually have last-month data to compare
+  // against. Passing undefined hides the badge entirely; passing 0 shows "0%" in red.
   const revenueGrowth = revenueLastMonth > 0
     ? Math.round(((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100)
-    : 0;
+    : undefined;
 
   // Revenue per billable hour this month (fees received ÷ hours logged)
   const revenuePerHour = hoursThisMonth > 0
