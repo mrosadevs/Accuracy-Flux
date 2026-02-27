@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/lib/theme-context";
+import { ActiveBoardProvider } from "@/lib/contexts/active-board-context";
 import "./globals.css";
 
 const inter = Inter({
@@ -50,7 +51,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} antialiased`}>
         <ThemeProvider>
-          {children}
+          <ActiveBoardProvider>
+            {children}
+          </ActiveBoardProvider>
         </ThemeProvider>
       </body>
     </html>

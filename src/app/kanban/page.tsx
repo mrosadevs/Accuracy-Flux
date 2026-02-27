@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import KanbanBoard from '@/components/kanban/KanbanBoard';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useActiveBoard } from '@/lib/contexts/active-board-context';
 import {
   Plus, ChevronDown, Star, Trash2, X, AlertCircle, Loader2,
   Calendar, Archive, Sparkles, Users,
@@ -36,7 +37,7 @@ function NewSeasonModal({
   onCreated,
 }: {
   onClose: () => void;
-  onCreated: (boardId: string) => void;
+  onCreated: (boardId: string, boardTitle: string) => void;
 }) {
   const supabase = useSupabase();
   const { clients } = useClients();
@@ -60,7 +61,7 @@ function NewSeasonModal({
     setSaving(true); setError('');
     try {
       if (!configured) {
-        onCreated('mock-new-board');
+        onCreated('mock-new-board', boardName.trim());
         onClose();
         return;
       }
@@ -114,7 +115,7 @@ function NewSeasonModal({
         }
       }
 
-      onCreated(board.id);
+      onCreated(board.id, boardName.trim());
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create season');
@@ -228,12 +229,20 @@ function NewSeasonModal({
 ───────────────────────────────────────────────────────────────────────────── */
 export default function KanbanPage() {
   const { boards, loading, createBoard, deleteBoard, toggleStarred, refetch } = useKanbanBoards();
-  const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
+  const { activeBoardId, setActiveBoard } = useActiveBoard();
   const [showBoardPicker, setShowBoardPicker] = useState(false);
   const [showNewSeason, setShowNewSeason] = useState(false);
   const [showCreateBoard, setShowCreateBoard] = useState(false);
 
-  const selectedBoard = boards.find(b => b.id === selectedBoardId) ?? boards.find(b => !b.is_archived) ?? boards[0] ?? null;
+  const selectedBoard = boards.find(b => b.id === activeBoardId) ?? boards.find(b => !b.is_archived) ?? boards[0] ?? null;
+
+  // Sync context when a fallback board is resolved (e.g. first load with no stored board)
+  useEffect(() => {
+    if (selectedBoard && selectedBoard.id !== activeBoardId) {
+      setActiveBoard(selectedBoard.id, selectedBoard.title);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBoard?.id]);
 
   const activeBoards = boards.filter(b => !b.is_archived);
   const archivedBoards = boards.filter(b => b.is_archived);
@@ -254,9 +263,9 @@ export default function KanbanPage() {
         {showNewSeason && (
           <NewSeasonModal
             onClose={() => setShowNewSeason(false)}
-            onCreated={(boardId) => {
+            onCreated={(boardId, boardTitle) => {
               refetch();
-              setSelectedBoardId(boardId);
+              setActiveBoard(boardId, boardTitle);
             }}
           />
         )}
@@ -265,7 +274,7 @@ export default function KanbanPage() {
             onClose={() => setShowCreateBoard(false)}
             onCreate={async (title, year) => {
               const board = await createBoard(title, year);
-              if (board) setSelectedBoardId(board.id);
+              if (board) setActiveBoard(board.id, board.title);
               return board;
             }}
           />
@@ -308,7 +317,7 @@ export default function KanbanPage() {
                             key={board.id}
                             board={board}
                             selected={selectedBoard?.id === board.id}
-                            onSelect={() => { setSelectedBoardId(board.id); setShowBoardPicker(false); }}
+                            onSelect={() => { setActiveBoard(board.id, board.title); setShowBoardPicker(false); }}
                             onToggleStar={() => toggleStarred(board.id)}
                             onArchive={async () => {
                               // TODO: archive support in use-kanban-boards
@@ -316,7 +325,10 @@ export default function KanbanPage() {
                             onDelete={() => {
                               if (confirm(`Delete "${board.title}"? This will also delete all columns and cards.`)) {
                                 deleteBoard(board.id);
-                                if (selectedBoard?.id === board.id) setSelectedBoardId(null);
+                                if (selectedBoard?.id === board.id) {
+                                  const next = boards.find(b => b.id !== board.id && !b.is_archived);
+                                  if (next) setActiveBoard(next.id, next.title);
+                                }
                               }
                             }}
                           />
@@ -334,12 +346,15 @@ export default function KanbanPage() {
                             board={board}
                             selected={selectedBoard?.id === board.id}
                             archived
-                            onSelect={() => { setSelectedBoardId(board.id); setShowBoardPicker(false); }}
+                            onSelect={() => { setActiveBoard(board.id, board.title); setShowBoardPicker(false); }}
                             onToggleStar={() => toggleStarred(board.id)}
                             onDelete={() => {
                               if (confirm(`Delete "${board.title}"?`)) {
                                 deleteBoard(board.id);
-                                if (selectedBoard?.id === board.id) setSelectedBoardId(null);
+                                if (selectedBoard?.id === board.id) {
+                                  const next = boards.find(b => b.id !== board.id && !b.is_archived);
+                                  if (next) setActiveBoard(next.id, next.title);
+                                }
                               }
                             }}
                           />
@@ -379,7 +394,7 @@ export default function KanbanPage() {
             {boards.filter(b => b.starred && !b.is_archived).map(board => (
               <button
                 key={board.id}
-                onClick={() => setSelectedBoardId(board.id)}
+                onClick={() => setActiveBoard(board.id, board.title)}
                 className={clsx(
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
                   selectedBoard?.id === board.id

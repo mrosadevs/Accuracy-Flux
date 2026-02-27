@@ -1,16 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, KanbanSquare, Mail,
   Clock, Settings, ChevronLeft, ChevronRight, Search,
-  Zap, Upload, X, UserCog, Briefcase
+  Zap, Upload, X, UserCog, Briefcase, ChevronDown, CalendarDays,
 } from 'lucide-react';
 import clsx from 'clsx';
+import { useState } from 'react';
 import { useProfile } from '@/lib/hooks/use-profile';
 import { useNotifications } from '@/lib/hooks/use-notifications';
+import { useActiveBoard } from '@/lib/contexts/active-board-context';
 
 const navItems = [
   { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard',     badge: null },
@@ -42,13 +44,23 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { profile, isAdmin } = useProfile();
   const { unreadCount } = useNotifications();
+  const { activeBoardId, activeBoardName, boards, setActiveBoard } = useActiveBoard();
+  const [showBoardPicker, setShowBoardPicker] = useState(false);
 
   const displayName = profile?.name ?? 'Loading…';
   const displayInitials = profile?.initials ?? (profile?.name ? profile.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'AF');
   const displayRole = profile?.role ? (profile.role.charAt(0).toUpperCase() + profile.role.slice(1)) : 'Staff';
   const roleColor = roleBadgeColors[profile?.role ?? 'staff'];
+
+  function handleBoardSelect(id: string, name: string) {
+    setActiveBoard(id, name);
+    setShowBoardPicker(false);
+    // If on the kanban page, the board will auto-refresh via the hook
+    // If on dashboard/work, the filtered data will update automatically
+  }
 
   const sidebarContent = (
     <>
@@ -96,6 +108,76 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
           <X className="w-4 h-4 text-text-secondary" />
         </button>
       </div>
+
+      {/* Season / Board Selector */}
+      <AnimatePresence>
+        {!collapsed && boards.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="px-3 pt-3 relative"
+          >
+            <p className="text-[9px] font-semibold text-text-muted uppercase tracking-wider px-1 mb-1">Active Season</p>
+            <button
+              onClick={() => setShowBoardPicker(p => !p)}
+              className={clsx(
+                'w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all',
+                showBoardPicker
+                  ? 'bg-primary-50 border-primary-300'
+                  : 'bg-background border-border hover:border-primary-300 hover:bg-primary-50/40'
+              )}
+            >
+              <CalendarDays className="w-3.5 h-3.5 text-primary-500 flex-shrink-0" />
+              <span className="text-xs font-semibold text-text-primary truncate flex-1">
+                {activeBoardName ?? 'Select season…'}
+              </span>
+              <ChevronDown className={clsx('w-3 h-3 text-text-muted flex-shrink-0 transition-transform', showBoardPicker && 'rotate-180')} />
+            </button>
+
+            {/* Dropdown */}
+            {showBoardPicker && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowBoardPicker(false)} />
+                <div className="absolute left-3 right-3 top-full mt-1 bg-white rounded-xl border border-border shadow-xl z-50 overflow-hidden">
+                  {boards.map(board => (
+                    <button
+                      key={board.id}
+                      onClick={() => handleBoardSelect(board.id, board.title)}
+                      className={clsx(
+                        'w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs transition-colors',
+                        board.id === activeBoardId
+                          ? 'bg-primary-50 text-primary-700 font-semibold'
+                          : 'text-text-secondary hover:bg-surface-hover'
+                      )}
+                    >
+                      <CalendarDays className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{board.title}</span>
+                      {board.id === activeBoardId && (
+                        <span className="ml-auto text-[9px] bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded-full font-bold">Active</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Collapsed: show calendar icon for season when sidebar is collapsed */}
+      {collapsed && activeBoardName && (
+        <div className="px-3 pt-3 flex justify-center">
+          <div className="relative group">
+            <div className="w-9 h-9 rounded-xl bg-primary-50 border border-primary-200 flex items-center justify-center">
+              <CalendarDays className="w-4 h-4 text-primary-600" />
+            </div>
+            <div className="absolute left-full ml-3 px-2 py-1 bg-foreground text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+              {activeBoardName}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <AnimatePresence>

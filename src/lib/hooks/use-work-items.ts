@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSupabase, isSupabaseConfigured } from "./use-supabase";
+import { useActiveBoard } from "@/lib/contexts/active-board-context";
 import type { WorkItem, Task } from "@/lib/types/database";
 
 export interface WorkItemWithTasks extends WorkItem {
@@ -13,6 +14,7 @@ export function useWorkItems() {
   const [workItems, setWorkItems] = useState<WorkItemWithTasks[]>([]);
   const [loading, setLoading] = useState(true);
   const configured = isSupabaseConfigured();
+  const { activeBoardId, ready: boardReady } = useActiveBoard();
 
   const fetchWorkItems = useCallback(async () => {
     if (!configured) {
@@ -21,16 +23,27 @@ export function useWorkItems() {
       return;
     }
 
-    const { data: items } = await supabase
+    // Wait for the active board context to finish loading from localStorage
+    // so we don't flash all-items before the board filter is applied.
+    if (!boardReady) return;
+
+    let query = supabase
       .from("work_items")
       .select("*")
       .order("created_at", { ascending: false });
+
+    // Filter by active board when one is selected
+    if (activeBoardId) {
+      query = query.eq("board_id", activeBoardId);
+    }
+
+    const { data: items } = await query;
 
     if (!items) { setLoading(false); return; }
 
     const ids = items.map(i => i.id);
     const { data: tasks } = ids.length
-      ? await supabase.from("tasks").select("*").in("work_item_id", ids).order("sort_order")
+      ? await supabase.from("tasks").select("*").in("work_item_id", ids).order("sort_order").order("created_at")
       : { data: [] };
 
     const withTasks: WorkItemWithTasks[] = items.map(item => ({
@@ -40,7 +53,7 @@ export function useWorkItems() {
 
     setWorkItems(withTasks);
     setLoading(false);
-  }, [supabase, configured]);
+  }, [supabase, configured, activeBoardId, boardReady]);
 
   // Safety: never show spinner forever
   useEffect(() => {
@@ -53,12 +66,12 @@ export function useWorkItems() {
     fetchWorkItems();
     if (!configured) return;
     const channel = supabase
-      .channel("work-items-changes")
+      .channel(`work-items-changes-${activeBoardId ?? 'all'}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "work_items" }, fetchWorkItems)
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, fetchWorkItems)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [fetchWorkItems, supabase, configured]);
+  }, [fetchWorkItems, supabase, configured, activeBoardId]);
 
   async function updateTaskCompletion(taskId: string, workItemId: string, completed: boolean) {
     if (!configured) return;
@@ -100,6 +113,7 @@ export function useWorkItems() {
         budget: input.budget ?? 0,
         time_spent: 0,
         show_in_portal: false,
+        board_id: input.board_id ?? activeBoardId ?? null,
       })
       .select().single();
     if (error) throw error;
