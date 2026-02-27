@@ -31,39 +31,66 @@ export function useProfile() {
   const configured = isSupabaseConfigured();
 
   useEffect(() => {
-    // Safety timeout: never show spinner forever (Edge/Chrome auth hangs)
-    const safetyTimer = setTimeout(() => setLoading(false), 6000);
+    if (!configured) {
+      setProfile(MOCK_PROFILE);
+      setLoading(false);
+      return;
+    }
 
-    async function load() {
-      if (!configured) {
-        clearTimeout(safetyTimer);
-        setProfile(MOCK_PROFILE);
-        setLoading(false);
-        return;
-      }
+    let mounted = true;
+    // Safety net — if nothing resolves in 4s, stop spinner
+    const safetyTimer = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 4000);
 
+    async function fetchProfile(userId: string) {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { clearTimeout(safetyTimer); setLoading(false); return; }
-
         const { data } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', user.id)
+          .eq('id', userId)
           .single();
-
-        setProfile(data ?? null);
-      } catch { /* ignore auth errors */ }
-      clearTimeout(safetyTimer);
-      setLoading(false);
+        if (mounted) setProfile(data ?? null);
+      } catch {
+        if (mounted) setProfile(null);
+      }
     }
 
-    load();
+    // getSession() reads from the client's memory/cookie store.
+    // It's synchronous if the token is fresh (< 1ms), or async if a
+    // refresh is needed. Either way it's far more reliable than waiting
+    // for the INITIAL_SESSION event, which can misfire with the singleton
+    // client pattern used here.
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return;
+      if (session?.user) {
+        await fetchProfile(session.user.id);
+      } else {
+        setProfile(null);
+      }
+      clearTimeout(safetyTimer);
+      if (mounted) setLoading(false);
+    });
 
-    if (!configured) return;
+    // Listen for future auth changes (sign in, token refresh, sign out)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session?.user) fetchProfile(session.user.id);
+      } else if (event === 'USER_UPDATED' && session?.user) {
+        fetchProfile(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        clearTimeout(safetyTimer);
+        setProfile(null);
+        setLoading(false);
+      }
+    });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => load());
-    return () => { clearTimeout(safetyTimer); subscription.unsubscribe(); };
+    return () => {
+      mounted = false;
+      clearTimeout(safetyTimer);
+      subscription.unsubscribe();
+    };
   }, [supabase, configured]);
 
   async function updateProfile(updates: Partial<Profile>) {

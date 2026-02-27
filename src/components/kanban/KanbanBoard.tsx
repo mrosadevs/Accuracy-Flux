@@ -1467,15 +1467,6 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
         {showAddColumn && (
           <AddColumnModal onClose={() => setShowAddColumn(false)} onSave={addColumn} />
         )}
-        {showTagManager && (
-          <TagManagerModal
-            tags={globalTags}
-            onClose={() => setShowTagManager(false)}
-            onCreate={async (name, color) => { await createGlobalTag(name, color); }}
-            onUpdate={updateGlobalTag}
-            onDelete={deleteGlobalTag}
-          />
-        )}
         {selectedCard && (
           <CardDetailPanel
             key={selectedCard.id}
@@ -1492,6 +1483,16 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
             onAssignTask={(taskId, assigneeId, assigneeName) => assignTask(taskId, assigneeName, assigneeId)}
             globalTags={globalTags}
             onManageTags={() => setShowTagManager(true)}
+          />
+        )}
+        {/* TagManagerModal MUST render after CardDetailPanel so it stacks above it (same z-50, later DOM = on top) */}
+        {showTagManager && (
+          <TagManagerModal
+            tags={globalTags}
+            onClose={() => setShowTagManager(false)}
+            onCreate={async (name, color) => { await createGlobalTag(name, color); }}
+            onUpdate={updateGlobalTag}
+            onDelete={deleteGlobalTag}
           />
         )}
         {deleteTarget && (
