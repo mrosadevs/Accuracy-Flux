@@ -352,7 +352,7 @@ SELECT
   aw.work_item_id,
   t.title,
   (t.phase_prio <= aw.max_prio)                                        AS completed,
-  CASE WHEN t.phase_prio <= aw.max_prio THEN 'done' ELSE 'todo' END   AS status,
+  CASE WHEN t.phase_prio <= aw.max_prio THEN 'completed' ELSE 'not-started' END AS status,
   NULL::uuid  AS assignee_id,
   NULL::text  AS assignee,
   NULL::date  AS due_date,
