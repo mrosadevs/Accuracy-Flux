@@ -58,8 +58,13 @@ export function useBoard(boardId?: string) {
     const workItemIds = workItems.map((i: WorkItem) => i.id);
 
     // Load all tasks for these work items
+    // Secondary sort by created_at keeps tasks in stable insertion order when
+    // multiple tasks share the same sort_order (e.g. after a bulk SQL import).
+    // Without this, PostgreSQL can return the last-updated row last because an
+    // UPDATE changes its internal row position (ctid), causing the assigned task
+    // to jump to the bottom of the list.
     const { data: tasks } = workItemIds.length
-      ? await supabase.from("tasks").select("*").in("work_item_id", workItemIds).order("sort_order")
+      ? await supabase.from("tasks").select("*").in("work_item_id", workItemIds).order("sort_order").order("created_at")
       : { data: [] };
 
     // Build WorkItemCard objects
