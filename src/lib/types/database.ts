@@ -94,6 +94,7 @@ export interface Database {
           assignee: string | null;
           due_date: string | null;
           sort_order: number;
+          business_name: string | null; // which entity this task belongs to
           created_at: string;
         };
         Insert: Omit<Database['public']['Tables']['tasks']['Row'], 'id' | 'created_at'>;

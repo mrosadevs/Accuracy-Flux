@@ -12,12 +12,16 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       setLoading(false);
+      // When the session expires and can't be refreshed, redirect to login
+      if (event === 'SIGNED_OUT') {
+        router.push('/login');
+      }
     });
     return () => subscription.unsubscribe();
-  }, [supabase]);
+  }, [supabase, router]);
 
   async function signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });

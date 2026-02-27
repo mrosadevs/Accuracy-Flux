@@ -296,6 +296,16 @@ function CardDetailPanel({
   const [tagSearch, setTagSearch] = useState('');
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const tagDropdownRef = useRef<HTMLDivElement>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() =>
+    new Set(card.tasks.map(t => t.business_name ?? '__none__'))
+  );
+  function toggleGroup(key: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -306,6 +316,26 @@ function CardDetailPanel({
   const entityType: EntityType | null = card.business_name
     ? (bizEntities.find(b => b.name === card.business_name)?.entity_type ?? null)
     : null;
+
+  // Group tasks by business_name (entity). All groups start expanded.
+  const taskGroups = (() => {
+    const seen = new Map<string | null, Task[]>();
+    for (const task of card.tasks) {
+      const key = task.business_name ?? null;
+      if (!seen.has(key)) seen.set(key, []);
+      seen.get(key)!.push(task);
+    }
+    // Order: entity order from bizEntities, then null group last
+    const result: { name: string | null; entityType: EntityType | null; tasks: Task[] }[] = [];
+    for (const be of bizEntities) {
+      if (seen.has(be.name)) {
+        result.push({ name: be.name, entityType: be.entity_type, tasks: seen.get(be.name)! });
+        seen.delete(be.name);
+      }
+    }
+    seen.forEach((tasks, name) => result.push({ name, entityType: null, tasks }));
+    return result;
+  })();
 
   const completedTasks = card.tasks.filter(t => t.completed).length;
   const totalTasks = card.tasks.length;
@@ -438,30 +468,17 @@ function CardDetailPanel({
             </select>
           </div>
 
-          {/* Business */}
-          {selectedClient && (selectedClient.businesses ?? []).length > 0 && (
+          {/* Entity type pills (read-only, derived from client) */}
+          {bizEntities.length > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted font-medium w-20 flex-shrink-0">Business</span>
-              <select
-                value={card.business_name ?? ''}
-                onChange={e => {
-                  const name = e.target.value;
-                  const entity = bizEntities.find(b => b.name === name);
-                  const updates: Partial<WorkItem> = { business_name: name || null };
-                  if (entity && card.type === 'tax-return' && !card.due_date) {
-                    updates.due_date = getDefaultDeadline(entity.entity_type);
-                  }
-                  onUpdate(updates);
-                }}
-                className="flex-1 h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all"
-              >
-                <option value="">No business</option>
-                {selectedClient.businesses.map(b => (
-                  <option key={b} value={b}>
-                    {b}{bizEntities.find(be => be.name === b) ? ` (${ENTITY_TYPE_SHORT[bizEntities.find(be => be.name === b)!.entity_type]})` : ''}
-                  </option>
+              <span className="text-xs text-text-muted font-medium w-20 flex-shrink-0">Entities</span>
+              <div className="flex flex-wrap gap-1">
+                {bizEntities.map(be => (
+                  <span key={be.name} className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-surface-hover text-text-secondary border-border">
+                    {ENTITY_TYPE_SHORT[be.entity_type]}
+                  </span>
                 ))}
-              </select>
+              </div>
             </div>
           )}
 
@@ -645,17 +662,48 @@ function CardDetailPanel({
               </div>
             )}
 
-            <div className="space-y-1">
-              {card.tasks.map(task => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  onComplete={(completed, status) => onCompleteTask(task.id, completed, status)}
-                  onDelete={() => onDeleteTask(task.id)}
-                  onAssign={(assigneeId, assigneeName) => onAssignTask(task.id, assigneeId, assigneeName)}
-                  teamMembers={members}
-                />
-              ))}
+            <div className="space-y-2">
+              {taskGroups.map(group => {
+                const groupKey = group.name ?? '__none__';
+                const isExpanded = expandedGroups.has(groupKey);
+                const done = group.tasks.filter(t => t.completed).length;
+                const total = group.tasks.length;
+                return (
+                  <div key={groupKey}>
+                    {/* Entity section header — only shown when tasks have a business_name */}
+                    {group.name && (
+                      <button
+                        onClick={() => toggleGroup(groupKey)}
+                        className="flex items-center gap-1.5 w-full py-1 px-1.5 rounded-lg hover:bg-surface-hover mb-0.5 group/gh"
+                      >
+                        <ChevronRight className={clsx('w-3 h-3 text-text-muted transition-transform flex-shrink-0', isExpanded && 'rotate-90')} />
+                        <span className="text-[11px] font-semibold text-text-primary flex-1 text-left truncate">{group.name}</span>
+                        {group.entityType && (
+                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded border bg-surface-hover text-text-secondary border-border flex-shrink-0">
+                            {ENTITY_TYPE_SHORT[group.entityType]}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-text-muted flex-shrink-0 ml-1">{done}/{total}</span>
+                      </button>
+                    )}
+                    {/* Task rows */}
+                    {isExpanded && (
+                      <div className={clsx('space-y-1', group.name && 'pl-3 border-l-2 border-border ml-1.5')}>
+                        {group.tasks.map(task => (
+                          <TaskRow
+                            key={task.id}
+                            task={task}
+                            onComplete={(completed, status) => onCompleteTask(task.id, completed, status)}
+                            onDelete={() => onDeleteTask(task.id)}
+                            onAssign={(assigneeId, assigneeName) => onAssignTask(task.id, assigneeId, assigneeName)}
+                            teamMembers={members}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Add task */}
