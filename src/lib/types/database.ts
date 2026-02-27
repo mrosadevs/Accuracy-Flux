@@ -22,6 +22,16 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['profiles']['Row'], 'created_at'>;
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
       };
+      global_tags: {
+        Row: {
+          id: string;
+          name: string;
+          color: string;
+          created_at: string;
+        };
+        Insert: { name: string; color: string };
+        Update: Partial<{ name: string; color: string }>;
+      };
       clients: {
         Row: {
           id: string;

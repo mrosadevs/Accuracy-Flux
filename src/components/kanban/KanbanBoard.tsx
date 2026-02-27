@@ -10,7 +10,7 @@ import {
   Plus, MoreHorizontal, Calendar, LayoutGrid, List, Filter, Search,
   Loader2, X, AlertCircle, CheckCircle2, Circle, Clock, ChevronRight,
   Tag, Trash2, Pencil, Sparkles, Save, ChevronDown, User, DollarSign,
-  FileText, Check, RefreshCw,
+  FileText, Check, RefreshCw, Settings,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useBoard, type WorkItemCard, type BoardColumn } from '@/lib/hooks/use-board';
@@ -21,6 +21,7 @@ import { useClients } from '@/lib/hooks/use-clients';
 import { useTeamMembers, type Profile } from '@/lib/hooks/use-profile';
 import { getDefaultDeadline, ENTITY_TYPE_SHORT } from '@/lib/utils/tax-deadlines';
 import { getMatchingTemplates } from '@/lib/templates/staff-templates';
+import { useGlobalTags, type GlobalTag } from '@/lib/hooks/use-global-tags';
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Constants / helpers
@@ -69,6 +70,31 @@ function tagColor(tag: string, idx: number) {
   return tagColors[idx % tagColors.length];
 }
 
+/** 16-color preset palette for the tag color picker */
+const TAG_COLORS = [
+  '#ef4444', '#f97316', '#f59e0b', '#eab308',
+  '#84cc16', '#22c55e', '#10b981', '#06b6d4',
+  '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7',
+  '#ec4899', '#f43f5e', '#64748b', '#78716c',
+];
+
+function hexTagStyle(hex: string): React.CSSProperties {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return {
+    backgroundColor: `rgba(${r},${g},${b},0.12)`,
+    color: hex,
+    borderColor: `rgba(${r},${g},${b},0.35)`,
+  };
+}
+
+function resolveTag(tag: string, idx: number, globalTags: GlobalTag[]): { className?: string; style?: React.CSSProperties } {
+  const gt = globalTags.find(t => t.name === tag);
+  if (gt) return { style: hexTagStyle(gt.color) };
+  return { className: tagColor(tag, idx) };
+}
+
 function formatDate(d?: string | null) {
   if (!d) return null;
   const date = new Date(d + 'T00:00:00');
@@ -85,12 +111,168 @@ function isDueSoon(d?: string | null) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   Tag Manager Modal
+───────────────────────────────────────────────────────────────────────────── */
+
+function TagManagerModal({
+  tags, onClose, onCreate, onUpdate, onDelete,
+}: {
+  tags: GlobalTag[];
+  onClose: () => void;
+  onCreate: (name: string, color: string) => Promise<void>;
+  onUpdate: (id: string, updates: { name?: string; color?: string }) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState('#3b82f6');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editColor, setEditColor] = useState('');
+  const [showNewPicker, setShowNewPicker] = useState(false);
+  const [showEditPicker, setShowEditPicker] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function handleCreate() {
+    if (!newName.trim()) return;
+    setSaving(true);
+    await onCreate(newName.trim(), newColor);
+    setNewName('');
+    setNewColor('#3b82f6');
+    setSaving(false);
+  }
+
+  function startEdit(tag: GlobalTag) {
+    setEditingId(tag.id);
+    setEditName(tag.name);
+    setEditColor(tag.color);
+    setShowEditPicker(false);
+  }
+
+  async function saveEdit() {
+    if (!editingId || !editName.trim()) return;
+    await onUpdate(editingId, { name: editName.trim(), color: editColor });
+    setEditingId(null);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-surface-primary rounded-2xl shadow-2xl border border-border w-full max-w-md mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
+          <h2 className="text-sm font-bold text-text-primary flex items-center gap-2">
+            <Tag className="w-4 h-4 text-primary-600" />Manage Labels
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted"><X className="w-4 h-4" /></button>
+        </div>
+
+        {/* New tag row */}
+        <div className="px-5 py-3 border-b border-border flex-shrink-0">
+          <div className="flex items-center gap-2">
+            {/* Color swatch */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNewPicker(p => !p)}
+                className="w-7 h-7 rounded-full border-2 border-white ring-1 ring-border flex-shrink-0 transition-transform hover:scale-110"
+                style={{ backgroundColor: newColor }}
+              />
+              {showNewPicker && (
+                <div className="absolute top-9 left-0 z-10 bg-surface-primary rounded-xl border border-border p-2 shadow-xl grid grid-cols-4 gap-1.5 w-32">
+                  {TAG_COLORS.map(c => (
+                    <button key={c} onClick={() => { setNewColor(c); setShowNewPicker(false); }}
+                      className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
+                      style={{ backgroundColor: c, borderColor: c === newColor ? '#fff' : 'transparent', outline: c === newColor ? `2px solid ${c}` : 'none' }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <input
+              type="text" placeholder="New label name..."
+              value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
+              className="flex-1 h-8 px-3 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400"
+            />
+            <button
+              onClick={handleCreate} disabled={!newName.trim() || saving}
+              className="h-8 px-3 rounded-lg bg-primary-600 text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-1"
+            >
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}Create
+            </button>
+          </div>
+        </div>
+
+        {/* Tag list */}
+        <div className="overflow-y-auto flex-1">
+          {tags.length === 0 && (
+            <p className="text-xs text-text-muted italic text-center py-8">No labels yet — create one above</p>
+          )}
+          {tags.map(tag => (
+            <div key={tag.id} className="flex items-center gap-2.5 px-5 py-2.5 hover:bg-surface-hover group border-b border-border/50 last:border-0">
+              {editingId === tag.id ? (
+                <>
+                  {/* Edit color swatch */}
+                  <div className="relative flex-shrink-0">
+                    <button
+                      onClick={() => setShowEditPicker(p => !p)}
+                      className="w-7 h-7 rounded-full border-2 border-white ring-1 ring-border transition-transform hover:scale-110"
+                      style={{ backgroundColor: editColor }}
+                    />
+                    {showEditPicker && (
+                      <div className="absolute top-9 left-0 z-10 bg-surface-primary rounded-xl border border-border p-2 shadow-xl grid grid-cols-4 gap-1.5 w-32">
+                        {TAG_COLORS.map(c => (
+                          <button key={c} onClick={() => { setEditColor(c); setShowEditPicker(false); }}
+                            className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
+                            style={{ backgroundColor: c, borderColor: c === editColor ? '#fff' : 'transparent', outline: c === editColor ? `2px solid ${c}` : 'none' }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    autoFocus value={editName} onChange={e => setEditName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingId(null); }}
+                    className="flex-1 h-7 px-2 text-xs bg-white rounded-lg border border-primary-400 focus:outline-none ring-2 ring-primary-500/20"
+                  />
+                  <button onClick={saveEdit} className="h-7 px-2 rounded-lg bg-primary-600 text-white text-[10px] font-semibold flex items-center gap-1">
+                    <Check className="w-3 h-3" />Save
+                  </button>
+                  <button onClick={() => setEditingId(null)} className="h-7 px-2 rounded-lg border border-border text-[10px] text-text-secondary">
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-full border flex-1 cursor-default"
+                    style={hexTagStyle(tag.color)}
+                  >
+                    {tag.name}
+                  </span>
+                  <button
+                    onClick={() => startEdit(tag)}
+                    className="p-1.5 rounded-lg text-text-muted hover:text-primary-600 hover:bg-primary-50 opacity-0 group-hover:opacity-100 transition-all"
+                  ><Pencil className="w-3.5 h-3.5" /></button>
+                  <button
+                    onClick={() => onDelete(tag.id)}
+                    className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 transition-all"
+                  ><Trash2 className="w-3.5 h-3.5" /></button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Card Detail Side Panel
 ───────────────────────────────────────────────────────────────────────────── */
 
 function CardDetailPanel({
   card, columns, onClose, onUpdate, onCompleteTask, onAddTask, onDeleteTask,
-  onMoveColumn, onAddTag, onRemoveTag, onAssignTask,
+  onMoveColumn, onAddTag, onRemoveTag, onAssignTask, globalTags, onManageTags,
 }: {
   card: WorkItemCard;
   columns: BoardColumn[];
@@ -103,14 +285,17 @@ function CardDetailPanel({
   onAddTag: (tag: string) => Promise<void>;
   onRemoveTag: (tag: string) => Promise<void>;
   onAssignTask: (taskId: string, assigneeId: string | null, assigneeName: string | null) => Promise<void>;
+  globalTags: GlobalTag[];
+  onManageTags: () => void;
 }) {
   const { clients } = useClients();
   const { members } = useTeamMembers();
   const [editing, setEditing] = useState<string | null>(null);
   const [editVal, setEditVal] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTag, setNewTag] = useState('');
-  const [showTagInput, setShowTagInput] = useState(false);
+  const [tagSearch, setTagSearch] = useState('');
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const tagDropdownRef = useRef<HTMLDivElement>(null);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -138,7 +323,6 @@ function CardDetailPanel({
     setNewTaskTitle('');
   }
 
-  const PRESET_TAGS = ['Referral', 'Rush', 'VIP', 'Extension', 'New Client', 'Priority'];
 
   return (
     <motion.div
@@ -324,45 +508,79 @@ function CardDetailPanel({
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-text-secondary">Labels</span>
-              <button onClick={() => setShowTagInput(!showTagInput)} className="text-[10px] text-primary-600 hover:underline flex items-center gap-0.5">
-                <Plus className="w-3 h-3" />Add
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button onClick={onManageTags} className="p-1 rounded hover:bg-surface-hover text-text-muted" title="Manage labels">
+                  <Settings className="w-3 h-3" />
+                </button>
+                <button onClick={() => { setShowTagDropdown(p => !p); setTagSearch(''); }} className="text-[10px] text-primary-600 hover:underline flex items-center gap-0.5">
+                  <Plus className="w-3 h-3" />Add
+                </button>
+              </div>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {(card.tags ?? []).map((tag, i) => (
-                <span key={tag} className={clsx('flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border', tagColor(tag, i))}>
-                  {tag}
-                  <button onClick={() => onRemoveTag(tag)} className="hover:opacity-60 transition-opacity">
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              ))}
+              {(card.tags ?? []).map((tag, i) => {
+                const { className: tc, style: ts } = resolveTag(tag, i, globalTags);
+                return (
+                  <span key={tag} className={clsx('flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border', tc)} style={ts}>
+                    {tag}
+                    <button onClick={() => onRemoveTag(tag)} className="hover:opacity-60 transition-opacity">
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                );
+              })}
               {(card.tags ?? []).length === 0 && (
                 <span className="text-[11px] text-text-muted italic">No labels</span>
               )}
             </div>
-            {showTagInput && (
-              <div className="mt-2 space-y-2">
-                <div className="flex gap-2">
+            {/* Tag dropdown */}
+            {showTagDropdown && (
+              <div ref={tagDropdownRef} className="mt-2 bg-white rounded-xl border border-border shadow-lg overflow-hidden">
+                <div className="p-2 border-b border-border">
                   <input
-                    type="text" placeholder="Custom label..." value={newTag}
-                    onChange={e => setNewTag(e.target.value)}
-                    onKeyDown={async e => { if (e.key === 'Enter' && newTag.trim()) { await onAddTag(newTag.trim()); setNewTag(''); setShowTagInput(false); }}}
-                    className="flex-1 h-8 px-2 text-xs bg-white rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400"
+                    autoFocus type="text" placeholder="Search or create label..."
+                    value={tagSearch} onChange={e => setTagSearch(e.target.value)}
+                    onKeyDown={async e => {
+                      if (e.key === 'Escape') { setShowTagDropdown(false); return; }
+                      if (e.key === 'Enter' && tagSearch.trim()) {
+                        await onAddTag(tagSearch.trim());
+                        setTagSearch(''); setShowTagDropdown(false);
+                      }
+                    }}
+                    className="w-full h-7 px-2 text-xs bg-surface-hover rounded-lg focus:outline-none"
                   />
-                  <button
-                    onClick={async () => { if (newTag.trim()) { await onAddTag(newTag.trim()); setNewTag(''); setShowTagInput(false); }}}
-                    className="h-8 px-3 rounded-lg bg-primary-600 text-white text-xs font-semibold"
-                  >Add</button>
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {PRESET_TAGS.filter(t => !(card.tags ?? []).includes(t)).map(t => (
+                <div className="max-h-48 overflow-y-auto">
+                  {globalTags
+                    .filter(t => !( card.tags ?? []).includes(t.name) && t.name.toLowerCase().includes(tagSearch.toLowerCase()))
+                    .map(t => (
+                      <button
+                        key={t.id}
+                        onClick={async () => { await onAddTag(t.name); setTagSearch(''); setShowTagDropdown(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-surface-hover text-left"
+                      >
+                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
+                        <span className="text-xs text-text-primary">{t.name}</span>
+                      </button>
+                    ))
+                  }
+                  {tagSearch.trim() && !globalTags.some(t => t.name.toLowerCase() === tagSearch.trim().toLowerCase()) && (
                     <button
-                      key={t}
-                      onClick={async () => { await onAddTag(t); setShowTagInput(false); }}
-                      className="text-[10px] px-2 py-0.5 rounded-full border border-border text-text-secondary hover:bg-surface-hover transition-colors"
-                    >{t}</button>
-                  ))}
+                      onClick={async () => { await onAddTag(tagSearch.trim()); setTagSearch(''); setShowTagDropdown(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-surface-hover text-left border-t border-border"
+                    >
+                      <Plus className="w-3 h-3 text-primary-600 flex-shrink-0" />
+                      <span className="text-xs text-primary-600">Create &ldquo;{tagSearch.trim()}&rdquo;</span>
+                    </button>
+                  )}
+                  {globalTags.filter(t => !(card.tags ?? []).includes(t.name) && t.name.toLowerCase().includes(tagSearch.toLowerCase())).length === 0 && !tagSearch.trim() && (
+                    <p className="text-[11px] text-text-muted italic text-center py-3">No labels available — type to create one</p>
+                  )}
+                </div>
+                <div className="border-t border-border">
+                  <button onClick={() => { setShowTagDropdown(false); onManageTags(); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-muted hover:bg-surface-hover">
+                    <Settings className="w-3 h-3" />Manage labels
+                  </button>
                 </div>
               </div>
             )}
@@ -921,11 +1139,12 @@ function AddColumnModal({ onClose, onSave }: { onClose: () => void; onSave: (tit
 /* ─────────────────────────────────────────────────────────────────────────────
    Board Card (shown on the kanban column)
 ───────────────────────────────────────────────────────────────────────────── */
-function BoardCard({ card, index, onOpen, onDelete }: {
+function BoardCard({ card, index, onOpen, onDelete, globalTags }: {
   card: WorkItemCard;
   index: number;
   onOpen: () => void;
   onDelete: () => void;
+  globalTags: GlobalTag[];
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const completedTasks = card.tasks.filter(t => t.completed).length;
@@ -993,11 +1212,14 @@ function BoardCard({ card, index, onOpen, onDelete }: {
             {/* Tags */}
             {(card.tags ?? []).length > 0 && (
               <div className="flex flex-wrap gap-1 mb-2.5">
-                {(card.tags ?? []).map((tag, i) => (
-                  <span key={tag} className={clsx('text-[9px] font-semibold px-1.5 py-0.5 rounded-full border', tagColor(tag, i))}>
-                    {tag}
-                  </span>
-                ))}
+                {(card.tags ?? []).map((tag, i) => {
+                  const { className: tc, style: ts } = resolveTag(tag, i, globalTags);
+                  return (
+                    <span key={tag} className={clsx('text-[9px] font-semibold px-1.5 py-0.5 rounded-full border', tc)} style={ts}>
+                      {tag}
+                    </span>
+                  );
+                })}
               </div>
             )}
 
@@ -1041,11 +1263,12 @@ function BoardCard({ card, index, onOpen, onDelete }: {
 /* ─────────────────────────────────────────────────────────────────────────────
    List View Row
 ───────────────────────────────────────────────────────────────────────────── */
-function ListRow({ card, column, onOpen, onDelete }: {
+function ListRow({ card, column, onOpen, onDelete, globalTags }: {
   card: WorkItemCard;
   column?: BoardColumn;
   onOpen: () => void;
   onDelete: () => void;
+  globalTags: GlobalTag[];
 }) {
   const completedTasks = card.tasks.filter(t => t.completed).length;
   const totalTasks = card.tasks.length;
@@ -1068,9 +1291,12 @@ function ListRow({ card, column, onOpen, onDelete }: {
         <p className="text-xs text-text-muted truncate">{card.title}</p>
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
-        {(card.tags ?? []).slice(0, 2).map((tag, i) => (
-          <span key={tag} className={clsx('text-[9px] font-semibold px-1.5 py-0.5 rounded-full border hidden md:inline', tagColor(tag, i))}>{tag}</span>
-        ))}
+        {(card.tags ?? []).slice(0, 2).map((tag, i) => {
+          const { className: tc, style: ts } = resolveTag(tag, i, globalTags);
+          return (
+            <span key={tag} className={clsx('text-[9px] font-semibold px-1.5 py-0.5 rounded-full border hidden md:inline', tc)} style={ts}>{tag}</span>
+          );
+        })}
         {totalTasks > 0 && (
           <span className="text-[10px] text-text-muted hidden sm:inline">{completedTasks}/{totalTasks} tasks</span>
         )}
@@ -1125,6 +1351,9 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
   const [renamingColumnId, setRenamingColumnId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<WorkItemCard | null>(null);
+  const [showTagManager, setShowTagManager] = useState(false);
+
+  const { tags: globalTags, ensureTag, createTag: createGlobalTag, updateTag: updateGlobalTag, deleteTag: deleteGlobalTag } = useGlobalTags();
 
   // Keep selectedCard in sync with real-time updates
   useEffect(() => {
@@ -1190,6 +1419,15 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
         {showAddColumn && (
           <AddColumnModal onClose={() => setShowAddColumn(false)} onSave={addColumn} />
         )}
+        {showTagManager && (
+          <TagManagerModal
+            tags={globalTags}
+            onClose={() => setShowTagManager(false)}
+            onCreate={async (name, color) => { await createGlobalTag(name, color); }}
+            onUpdate={updateGlobalTag}
+            onDelete={deleteGlobalTag}
+          />
+        )}
         {selectedCard && (
           <CardDetailPanel
             key={selectedCard.id}
@@ -1201,9 +1439,11 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
             onAddTask={title => addTask(selectedCard.id, title)}
             onDeleteTask={taskId => deleteTask(taskId)}
             onMoveColumn={colId => moveCard(selectedCard.id, colId)}
-            onAddTag={tag => addTag(selectedCard.id, tag)}
+            onAddTag={async tag => { await addTag(selectedCard.id, tag); await ensureTag(tag); }}
             onRemoveTag={tag => removeTag(selectedCard.id, tag)}
             onAssignTask={(taskId, assigneeId, assigneeName) => assignTask(taskId, assigneeName, assigneeId)}
+            globalTags={globalTags}
+            onManageTags={() => setShowTagManager(true)}
           />
         )}
         {deleteTarget && (
@@ -1351,6 +1591,7 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
                             index={idx}
                             onOpen={() => setSelectedCard(card)}
                             onDelete={() => setDeleteTarget(card)}
+                            globalTags={globalTags}
                           />
                         ))}
                         {provided.placeholder}
@@ -1399,6 +1640,7 @@ export default function KanbanBoard({ boardId }: { boardId?: string }) {
                   column={col}
                   onOpen={() => setSelectedCard(card)}
                   onDelete={() => setDeleteTarget(card)}
+                  globalTags={globalTags}
                 />
               );
             })
