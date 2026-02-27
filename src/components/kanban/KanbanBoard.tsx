@@ -506,9 +506,28 @@ function CardDetailPanel({
                 {(card.budget ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}
               </button>
             )}
-            {card.time_spent > 0 && (
-              <span className="text-xs text-text-muted">· {card.time_spent}h logged</span>
-            )}
+            {/* Payment status toggle */}
+            <button
+              onClick={() => {
+                const received = card.payment_status !== 'received';
+                onUpdate({
+                  payment_status: received ? 'received' : 'pending',
+                  payment_received_at: received ? new Date().toISOString() : null,
+                });
+              }}
+              className={clsx(
+                'flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border transition-all flex-shrink-0',
+                card.payment_status === 'received'
+                  ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+              )}
+              title={card.payment_status === 'received' ? 'Click to mark as pending' : 'Click to mark as received'}
+            >
+              {card.payment_status === 'received'
+                ? <><CheckCircle2 className="w-2.5 h-2.5" />Received</>
+                : <><Clock className="w-2.5 h-2.5" />Pending</>
+              }
+            </button>
           </div>
 
           {/* Tags */}

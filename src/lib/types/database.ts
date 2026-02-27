@@ -79,9 +79,11 @@ export interface Database {
           column_id: string | null;
           tags: string[];
           sort_order: number;
+          payment_status: 'pending' | 'received';
+          payment_received_at: string | null;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['work_items']['Row'], 'id' | 'created_at' | 'show_in_portal' | 'tags' | 'sort_order'> & { show_in_portal?: boolean; tags?: string[]; sort_order?: number };
+        Insert: Omit<Database['public']['Tables']['work_items']['Row'], 'id' | 'created_at' | 'show_in_portal' | 'tags' | 'sort_order' | 'payment_status' | 'payment_received_at'> & { show_in_portal?: boolean; tags?: string[]; sort_order?: number; payment_status?: 'pending' | 'received'; payment_received_at?: string | null };
         Update: Partial<Database['public']['Tables']['work_items']['Insert']>;
       };
       tasks: {

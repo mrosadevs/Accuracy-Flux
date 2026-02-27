@@ -33,13 +33,16 @@ export default function DashboardPage() {
   const invoiceThisMonth = invoices.filter(i => billableStatuses.includes(i.status) && i.issued_date >= monthStart).reduce((s, i) => s + i.amount, 0);
   const invoiceLastMonth = invoices.filter(i => billableStatuses.includes(i.status) && i.issued_date >= lastMonthStart && i.issued_date <= lastMonthEnd).reduce((s, i) => s + i.amount, 0);
 
-  // Work item budgets: active/started work created this month (proxy for billed work in progress)
-  const activeBudgetStatuses = ['in-progress', 'waiting-on-client', 'in-review', 'completed'];
-  const workBudgetThisMonth  = workItems.filter(w => w.budget > 0 && activeBudgetStatuses.includes(w.status) && w.created_at >= monthStart).reduce((s, w) => s + w.budget, 0);
-  const workBudgetLastMonth  = workItems.filter(w => w.budget > 0 && activeBudgetStatuses.includes(w.status) && w.created_at >= lastMonthStart && w.created_at <= lastMonthEnd).reduce((s, w) => s + w.budget, 0);
+  // Work item fees marked as "Payment Received" — only count when explicitly toggled received
+  const workPaymentThisMonth = workItems
+    .filter(w => w.payment_status === 'received' && w.budget > 0 && w.payment_received_at && w.payment_received_at >= monthStart)
+    .reduce((s, w) => s + w.budget, 0);
+  const workPaymentLastMonth = workItems
+    .filter(w => w.payment_status === 'received' && w.budget > 0 && w.payment_received_at && w.payment_received_at >= lastMonthStart && w.payment_received_at <= lastMonthEnd)
+    .reduce((s, w) => s + w.budget, 0);
 
-  const revenueThisMonth = invoiceThisMonth + workBudgetThisMonth;
-  const revenueLastMonth = invoiceLastMonth + workBudgetLastMonth;
+  const revenueThisMonth = invoiceThisMonth + workPaymentThisMonth;
+  const revenueLastMonth = invoiceLastMonth + workPaymentLastMonth;
 
   const revenueGrowth = revenueLastMonth > 0
     ? Math.round(((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100)
