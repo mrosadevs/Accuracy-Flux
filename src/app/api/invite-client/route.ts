@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Server-side only: uses the service role key to send invite emails
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
-}
+import { createAdminClient, requireStaff } from '@/lib/server/route-auth';
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireStaff(request);
+    if ('response' in auth) return auth.response;
+
     const { clientId, email, clientName } = await request.json();
 
     if (!clientId || !email) {

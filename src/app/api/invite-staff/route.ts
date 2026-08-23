@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient, requireStaff } from '@/lib/server/route-auth';
 
 export const maxDuration = 30; // allow up to 30s for SMTP sending
 
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
-}
-
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireStaff(request);
+    if ('response' in auth) return auth.response;
+
     const { email, name, role } = await request.json();
     if (!email || !name) {
       return NextResponse.json({ error: 'email and name are required' }, { status: 400 });

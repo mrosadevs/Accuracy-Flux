@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import clsx from 'clsx';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import AnimatedBackground from '@/components/ui/AnimatedBackground';
@@ -51,10 +53,21 @@ export default function AppShell({ children, title, subtitle }: AppShellProps) {
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
       />
-      <div className="transition-all duration-300 md:ml-[260px] relative z-10">
+      <div
+        className={clsx(
+          'transition-all duration-300 relative z-10',
+          collapsed ? 'md:ml-[72px]' : 'md:ml-[260px]'
+        )}
+      >
         <TopBar title={title} subtitle={subtitle} onMenuClick={() => setMobileOpen(true)} />
         <main className="p-4 md:p-6 h-[calc(100vh-64px)] overflow-y-auto">
-          {children}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {children}
+          </motion.div>
         </main>
       </div>
       <AIAssistant />

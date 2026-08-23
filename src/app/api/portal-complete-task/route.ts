@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient, requireClientAccess } from '@/lib/server/route-auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,11 +16,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) return NextResponse.json({ error: 'Not configured' }, { status: 503 });
+    // Portal users may only toggle between done / not done — never arbitrary statuses
+    if (newStatus !== 'completed' && newStatus !== 'not-started') {
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    }
 
-    const admin = createClient(url, key, { auth: { persistSession: false } });
+    const auth = await requireClientAccess(request, clientId);
+    if ('response' in auth) return auth.response;
+
+    const admin = createAdminClient();
 
     // Security: make sure the work item actually belongs to this client and is portal-visible
     const { data: workItem } = await admin

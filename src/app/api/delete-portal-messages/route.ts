@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient, requireClientAccess } from '@/lib/server/route-auth';
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -10,15 +10,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'clientId required' }, { status: 400 });
     }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) {
-      return NextResponse.json({ error: 'Server not configured' }, { status: 503 });
-    }
+    const auth = await requireClientAccess(request, clientId);
+    if ('response' in auth) return auth.response;
 
-    const supabaseAdmin = createClient(url, key, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const supabaseAdmin = createAdminClient();
 
     const { error } = await supabaseAdmin
       .from('portal_messages')

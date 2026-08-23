@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient, requireClientAccess } from '@/lib/server/route-auth';
 
 export async function DELETE(request: NextRequest) {
   const { docId, filePath, clientId } = await request.json();
@@ -7,11 +7,10 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'docId, filePath, and clientId are required' }, { status: 400 });
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return NextResponse.json({ error: 'Not configured' }, { status: 503 });
+  const auth = await requireClientAccess(request, clientId);
+  if ('response' in auth) return auth.response;
 
-  const admin = createClient(url, key, { auth: { persistSession: false } });
+  const admin = createAdminClient();
 
   // Security: only allow deleting client-uploaded files (uploaded_by IS NULL) for the given clientId
   const { data: doc } = await admin

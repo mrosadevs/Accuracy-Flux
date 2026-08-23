@@ -147,7 +147,7 @@ export default function AIAssistant() {
                       <Bot className="w-3.5 h-3.5 text-white" />
                     </div>
                     <div className="bg-surface-hover rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-sm text-text-secondary">
-                      Hi! I'm your accounting AI assistant. Ask me about tax deadlines, bookkeeping, client communications, or anything else related to your practice.
+                      Hi! I&apos;m your accounting AI assistant. Ask me about tax deadlines, bookkeeping, client communications, or anything else related to your practice.
                     </div>
                   </div>
                   <div>

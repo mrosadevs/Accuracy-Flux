@@ -1,6 +1,7 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { useEffect, useRef } from 'react';
+import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } from 'framer-motion';
 import { LucideIcon, TrendingUp, TrendingDown } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -48,6 +49,28 @@ const colorMap = {
   },
 };
 
+/** Spring count-up so stats roll to their value instead of appearing. */
+function AnimatedValue({ value, format }: { value: number; format?: StatCardProps['format'] }) {
+  const reduceMotion = useReducedMotion();
+  const motionValue = useMotionValue(0);
+  const spring = useSpring(motionValue, { stiffness: 80, damping: 22, mass: 0.9 });
+  const display = useTransform(spring, (v) => {
+    const rounded = Math.round(v);
+    if (format === 'currency') return `$${rounded.toLocaleString()}`;
+    if (format === 'percentage') return `${rounded}%`;
+    return rounded.toLocaleString();
+  });
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    if (reduceMotion && !mounted.current) motionValue.jump(value);
+    else motionValue.set(value);
+    mounted.current = true;
+  }, [value, reduceMotion, motionValue]);
+
+  return <motion.span className="tabular-nums">{display}</motion.span>;
+}
+
 export default function StatCard({ title, value, change, changeLabel, icon: Icon, color, delay = 0, format }: StatCardProps) {
   const colors = colorMap[color];
   const isPositive = change && change > 0;
@@ -68,7 +91,8 @@ export default function StatCard({ title, value, change, changeLabel, icon: Icon
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, delay, ease: [0.4, 0, 0.2, 1] }}
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
-      className="bg-white rounded-2xl border border-border p-5 hover:shadow-lg hover:shadow-primary-500/5 transition-shadow cursor-pointer group"
+      whileTap={{ scale: 0.98 }}
+      className="relative overflow-hidden bg-white rounded-2xl border border-border p-5 hover:shadow-lg hover:shadow-primary-500/5 transition-shadow cursor-pointer group"
     >
       <div className="flex items-start justify-between mb-4">
         <motion.div
@@ -95,7 +119,7 @@ export default function StatCard({ title, value, change, changeLabel, icon: Icon
         transition={{ delay: delay + 0.2 }}
       >
         <p className="text-2xl font-bold text-text-primary tracking-tight">
-          {formatValue(value)}
+          {typeof value === 'number' ? <AnimatedValue value={value} format={format} /> : formatValue(value)}
         </p>
         <p className="text-xs text-text-muted mt-1 font-medium">{title}</p>
         {changeLabel && (
